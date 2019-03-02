@@ -24,9 +24,9 @@ struct GList {
 };
 ```
 
-일반적으로 링크드 리스트 구조는 각 항목에 대한 포인터를 포함합니다. 하지만 리눅스 커널의 링크드 리스트 구현은 이를 포함하지 않는군요. 따라서 주요 질문은 다음과 같습니다. `과연 리스트는 어디에 실제로 데이터를 저장할까요?` The actual implementation of linked list in the kernel is - `Intrusive list`. An intrusive linked list does not contain data in its nodes - A node just contains pointers to the next and previous node and list nodes part of the data that are added to the list. This makes the data structure generic, so it does not care about entry data type anymore.
+일반적으로 링크드 리스트 구조는 각 항목에 대한 포인터를 포함합니다. 하지만 리눅스 커널의 링크드 리스트 구현은 이를 포함하지 않는군요. 따라서 주요 질문은 다음과 같습니다. `과연 리스트는 어디에 실제로 데이터를 저장할까요?` 커널에서의 링크드리스트는 `Intrusive list`로 구현되어 있습니다. `Intrusive linked list`는 노드에 실제 데이터를 포함하지 않습니다. 각 노드는 단지 이전 노드와 다음 노드에 대한 포인터를 가질 뿐입니다. 추가로 각 노드를 리스트에 추가될 실제 데이터(구조체)의 필드로 선언해서, 각 노드에 접근해서 리스트의 데이터를 얻어낼 수 있습니다. 이렇게 하면 데이터 구조를 일반화할 수 있어서 실제 데이터의 타입을 더이상 신경쓰지 않아도 됩니다.
 
-For example:
+예를 들어보겠습니다.
 
 ```C
 struct nmi_desc {
@@ -35,13 +35,13 @@ struct nmi_desc {
 };
 ```
 
-Let's look at some examples to understand how `list_head` is used in the kernel. As I already wrote about, there are many, really many different places where lists are used in the kernel. Let's look for an example in miscellaneous character drivers. Misc character drivers API from the [drivers/char/misc.c](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/drivers/char/misc.c) is used for writing small drivers for handling simple hardware or virtual devices. Those drivers share same major number:
+`list_head`(노드)가 실제로 어떻게 커널에서 사용되는지 여러 예시를 살펴봅시다. 앞에서 말했듯이, 커널 내부의 굉장히 많은 곳에서 리스트를 사용하고 있습니다. 리눅스 커널의 Misc character 드라이버의 예시를 살펴봅시다. [drivers/char/misc.c](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/drivers/char/misc.c) 에 있는 misc character 드라이버 API는 간단한 하드웨어나 가상 디바이스를 다루기 위한 작은 드라이버를 작성하는데 사용됩니다. 이 드라이버들은 같은 주요 넘버를 공유합니다. 
 
 ```C
 #define MISC_MAJOR              10
 ```
 
-but have their own minor number. For example you can see it with:
+하지만 일부는 자신들만의 넘버를 가지고 있습니다. 아래에서 예시를 확인할 수 있습니다.
 
 ```
 ls -l /dev |  grep 10
@@ -67,7 +67,7 @@ crw-------   1 root root     10,  63 Mar 21 12:01 vga_arbiter
 crw-------   1 root root     10, 137 Mar 21 12:01 vhci
 ```
 
-Now let's have a close look at how lists are used in the misc device drivers. First of all, let's look on `miscdevice` structure:
+이제 misc 디바이스 드라이버에서 실제로 리스트를 어떻게 사용하는지에 대해 자세히 살펴봅시다. 우선 `miscdevice` 구조체를 살펴봅시다.
 
 ```C
 struct miscdevice
@@ -83,7 +83,7 @@ struct miscdevice
 };
 ```
 
-We can see the fourth field in the `miscdevice` structure - `list` which is a list of registered devices. In the beginning of the source code file we can see the definition of misc_list:
+`miscdevice` 구조체의 네 번째 필드를 보세요. (역주: 실제로 리스트에 저장될 데이터에 list_head 구조체를 삽입하는 것을 확인 가능) 여기서 `list`는 등록된 장치들의 리스트를 뜻합니다. 소스 코드의 시작 부분에서 misc_list의 정의를 볼 수 있습니다. 소스 코드의 시작 부분에서 misc_list의 정의를 볼 수 있습니다.
 
 ```C
 static LIST_HEAD(misc_list);
@@ -247,3 +247,8 @@ Of course `list_add` and `list_entry` is not the only functions which `<linux/li
 * list_for_each_entry
 
 and many more.
+
+번역자 추천 참고 문서
+
+* Intrusive List의 이해([pintos](https://web.stanford.edu/class/cs140/projects/pintos/pintos.html)/src/lib/kernel/list.c, list.h) <br>
+* 스택오버플로우: [Intrusive list란?](https://stackoverflow.com/questions/3361145/intrusive-lists)
