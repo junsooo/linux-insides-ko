@@ -75,6 +75,7 @@ New issues and full requests are always welcome!
 ---------------
 
 [@junsooo](https://github.com/junsooo)
+[@mingrammer](https://github.com/mingrammer)
 
 라이센스
 -------------
