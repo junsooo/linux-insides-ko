@@ -56,12 +56,16 @@ New issues and full requests are always welcome!
 --------------
 시스템 콜 - [1](https://github.com/junsooo/linux-insides-ko/blob/master/SysCall/linux-syscall-1.md)
 
+진행중인 세션
+--------------
+데이터 구조 - [1](https://github.com/junsooo/linux-insides-ko/blob/master/DataStructures/linux-datastructures-1.md)
+
 기여하기
 --------------
 
 문제를 발견하면 언제든 이슈를 생성하거나 풀 리퀘스트를 보내주세요.
 
-**변경 사항을 적용하기 전에 [CONTRIBUTING.md](https://github.com/0xAX/linux-insides/blob/master/CONTRIBUTING.md)를 꼭 읽어주세요.**
+**변경 사항을 적용하기 전에 [CONTRIBUTING.md](https://github.com/junsooo/linux-insides-ko/blob/master/CONTRIBUTING.md)를 꼭 읽어주세요.**
 
 ![image](http://oi58.tinypic.com/23upobq.jpg)
 
