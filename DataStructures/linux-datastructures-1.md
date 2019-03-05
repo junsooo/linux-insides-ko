@@ -83,7 +83,7 @@ struct miscdevice
 };
 ```
 
-`miscdevice` 구조체의 네 번째 필드를 보세요. (역주: 실제로 리스트에 저장될 데이터에 list_head 구조체를 삽입하는 것을 확인 가능) 여기서 `list`는 등록된 장치들의 리스트를 뜻합니다. 소스 코드의 시작 부분에서 misc_list의 정의를 볼 수 있습니다. 소스 코드의 시작 부분에서 misc_list의 정의를 볼 수 있습니다.
+`miscdevice` 구조체의 네 번째 필드를 보세요. (역주: 실제로 리스트에 저장될 데이터에 list_head 구조체를 삽입하는 것을 확인 가능) 여기서 `list`는 등록된 장치들의 리스트를 뜻합니다. 소스 코드의 시작 부분에서 misc_list의 정의를 볼 수 있습니다. 
 
 ```C
 static LIST_HEAD(misc_list);
