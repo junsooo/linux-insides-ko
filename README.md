@@ -50,7 +50,7 @@ https://groups.google.com/forum/#!forum/kernelhacking
 
 새로운 이슈와 풀 리퀘스트는 언제나 환영합니다!!
 
-New issues and full requests are always welcome!
+New issues and pull requests are always welcome!
 
 번역 완료된 세션
 --------------
