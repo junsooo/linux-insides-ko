@@ -7,6 +7,8 @@ linux-insides 한국어 번역
 
 **질문/제안(내용 관련)**: 질문이나 제안할 것이 있으면 언제든 트위터 [@0xAX](https://twitter.com/0xAX)를 핑(ping)하거나 [이슈](https://github.com/0xAX/linux-insides/issues/new)를 추가하세요. 아니면 원저자에게 간단히 [이메일](mailto:anotherworldofworld@gmail.com)을 주세요.
 
+**질문/제안(번역 repo 관련)**: linux-insides-ko 레포지토리 관련해서 제안할 것이나 궁금한 것 등등이 있으시면 언제든 @junsooo에게 간단히 [이메일](mailto:freshmilk264@gmail.com)을 주세요.
+
 한국어 번역에 기여하기
 --------------
 
