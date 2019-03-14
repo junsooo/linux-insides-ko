@@ -7,9 +7,57 @@ linux-insides 한국어 번역
 
 **질문/제안(내용 관련)**: 질문이나 제안할 것이 있으면 언제든 트위터 [@0xAX](https://twitter.com/0xAX)를 핑(ping)하거나 [이슈](https://github.com/0xAX/linux-insides/issues/new)를 추가하세요. 아니면 원저자에게 간단히 [이메일](mailto:anotherworldofworld@gmail.com)을 주세요.
 
-**질문/제안(번역 관련)**: 한국어 번역 관련해서 궁금한 것이 생기면 언제든 @junsooo에게 [이메일](mailto:freshmilk264@gmail.com)을 주세요.
+한국어 번역에 기여하기
+--------------
 
-# 메일링 리스트
+새로운 이슈와 풀 리퀘스트 모두 언제든 환영합니다 :)
+
+**시작하기 전에 [CONTRIBUTING.md](https://github.com/junsooo/linux-insides-ko/blob/master/CONTRIBUTING.md)를 꼭 읽어주세요.**
+
+
+원저자 후원
+-------
+
+`linux-insides`가 마음에 들면 [원저자를](https://twitter.com/0xAX) 후원해주세요.
+
+[![Support with bitcoin](https://img.shields.io/badge/donate-bitcoin-green.svg)](https://www.coinbase.com/checkouts/0bfa452a41cf52c0b3f99500b4f31685) [![Join the chat at https://gitter.im/0xAX/linux-insides](https://badges.gitter.im/0xAX/linux-insides.svg)](https://gitter.im/0xAX/linux-insides?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge&utm_content=badge)
+
+다른 언어들
+-------------------
+
+  * [Brazilian Portuguese](https://github.com/mauri870/linux-insides)
+  * [Chinese](https://github.com/MintCN/linux-insides-zh)
+  * [English](https://github.com/0xAX/linux-insides)
+  * [Japanese](https://github.com/tkmru/linux-insides-ja)
+  * [Russian](https://github.com/proninyaroslav/linux-insides-ru)
+  * [Spanish](https://github.com/leolas95/linux-insides)
+  * [Turkish](https://github.com/ayyucedemirbas/linux-insides_Turkish)
+
+번역 완료된 세션
+--------------
+시스템 콜 - [1](https://github.com/junsooo/linux-insides-ko/blob/master/SysCall/linux-syscall-1.md)
+
+진행중인 세션
+--------------
+데이터 구조 - [1](https://github.com/junsooo/linux-insides-ko/blob/master/DataStructures/linux-datastructures-1.md)
+
+원 저자
+---------------
+
+[@0xAX](https://twitter.com/0xAX)
+
+한국어 번역자
+---------------
+
+[여기](https://github.com/junsooo/linux-insides-ko/blob/master/korean-contributors.md)에 계시는 모든 분들
+
+라이센스
+-------------
+
+[BY-NC-SA Creative Commons](http://creativecommons.org/licenses/by-nc-sa/4.0/)
+
+
+# (linux-insides) 메일링 리스트
 
 현재 커널 소스 코드의 학습을 위한 구글 그룹 메일링 리스트를 운영중입니다. 아래는 사용법에 대한 설명입니다.
 
@@ -26,62 +74,3 @@ linux-insides 한국어 번역
 #### 아카이브
 
 https://groups.google.com/forum/#!forum/kernelhacking
-
-원저자 후원
--------
-
-**후원** `linux-insides`가 마음에 들면 [원저자를](https://twitter.com/0xAX) 후원해주세요.
-
-[![Support with bitcoin](https://img.shields.io/badge/donate-bitcoin-green.svg)](https://www.coinbase.com/checkouts/0bfa452a41cf52c0b3f99500b4f31685) [![Join the chat at https://gitter.im/0xAX/linux-insides](https://badges.gitter.im/0xAX/linux-insides.svg)](https://gitter.im/0xAX/linux-insides?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge&utm_content=badge)
-
-다른 언어들
--------------------
-
-  * [Brazilian Portuguese](https://github.com/mauri870/linux-insides)
-  * [Chinese](https://github.com/MintCN/linux-insides-zh)
-  * [English](https://github.com/0xAX/linux-insides)
-  * [Japanese](https://github.com/tkmru/linux-insides-ja)
-  * [Russian](https://github.com/proninyaroslav/linux-insides-ru)
-  * [Spanish](https://github.com/leolas95/linux-insides)
-  * [Turkish](https://github.com/ayyucedemirbas/linux-insides_Turkish)
-
-기여하기(한국어 번역)
---------------
-
-새로운 이슈와 풀 리퀘스트는 언제나 환영합니다!!
-
-New issues and pull requests are always welcome!
-
-번역 완료된 세션
---------------
-시스템 콜 - [1](https://github.com/junsooo/linux-insides-ko/blob/master/SysCall/linux-syscall-1.md)
-
-진행중인 세션
---------------
-데이터 구조 - [1](https://github.com/junsooo/linux-insides-ko/blob/master/DataStructures/linux-datastructures-1.md)
-
-기여하기
---------------
-
-문제를 발견하면 언제든 이슈를 생성하거나 풀 리퀘스트를 보내주세요.
-
-**변경 사항을 적용하기 전에 [CONTRIBUTING.md](https://github.com/junsooo/linux-insides-ko/blob/master/CONTRIBUTING.md)를 꼭 읽어주세요.**
-
-![image](http://oi58.tinypic.com/23upobq.jpg)
-
-
-저자
----------------
-
-[@0xAX](https://twitter.com/0xAX)
-
-한국어 번역
----------------
-
-[@junsooo](https://github.com/junsooo)
-[@mingrammer](https://github.com/mingrammer)
-
-라이센스
--------------
-
-[BY-NC-SA Creative Commons](http://creativecommons.org/licenses/by-nc-sa/4.0/)에 의해 허가됨
