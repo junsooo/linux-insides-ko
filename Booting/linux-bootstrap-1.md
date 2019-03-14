@@ -27,6 +27,8 @@
 마법의 컴퓨터 전원 버튼을 누르면 무슨 일이 벌어지나요?
 --------------------------------------------------------------------------------
 
+비록 이 시리즈가 리눅스 켜널에 대한 포스트들 일지라도, 우리는 직접 리눅스 커널부터 시작하지는 않을 것입니다.이 패러그래프에서, 당신의 컴퓨터나 노트북에 있는 마법의 전원 버튼을 눌렀을때, 금방 이것은 작동하기 시작합니다.
+메인보드가 파워 서플라이에 신호를 보냅니다. 신호를 받고 나서는, 파워 서플라이는 컴퓨터에 필요한 전력을 제공하기 시작합니다. 일단 메인보드가 Power good Signal을 받고나면, 메인보드는 CPU 시작을 시도합니다.CPU는 모든 레지스터의 데이터를 초기화하고, 각각 미리 정의된 값들을 설정합니다.
 Although this is a series of posts about the Linux kernel, we will not be starting directly from the kernel code - at least not, in this paragraph. As soon as you press the magical power button on your laptop or desktop computer, it starts working. The motherboard sends a signal to the [power supply](https://en.wikipedia.org/wiki/Power_supply) device. After receiving the signal, the power supply provides the proper amount of electricity to the computer. Once the motherboard receives the [power good signal](https://en.wikipedia.org/wiki/Power_good_signal), it tries to start the CPU. The CPU resets all leftover data in its registers and sets up predefined values for each of them.
 
 The [80386](https://en.wikipedia.org/wiki/Intel_80386) CPU and later define the following predefined data in CPU registers after the computer resets:
