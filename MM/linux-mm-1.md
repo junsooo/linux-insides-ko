@@ -11,9 +11,9 @@ Memblock
 
 Memblock은 초기 부팅 단계에서 커널의 메모리 할당자가 초기화가 되지 않아 제대로 동작하기 전에, 메모리를 관리하는 방법 중 하나이다. 원래는 `Logical Memory Block`이라는 이름으로 사용되었으나, Yinghai Lu 라는 사람이 만든 [패치](https://lkml.org/lkml/2010/7/13/68) 이후에 `memblock`으로 변경되었다. `x86_64` 아케택쳐를 사용하는 커널이 `memblock`를 사용하기에 [커널 엔트리 포인트로 가기 전에 마지막 준비 작업](https://0xax.gitbooks.io/linux-insides/content/Initialization/linux-initialization-3.html)에서 봤던 적이 있다. 이번에는 어떻게 구현되어있는지 알아보겠다.
 
-We will start to learn `memblock` from the data structures. Definitions of all logical-memory-block-related data structures can be found in the [include/linux/memblock.h](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/include/linux/memblock.h) header file.
+먼저 `memblock`를 자료구조 입장에서 시작해보겠다. 논리 메모리 블락 관련 자료구조는 [include/linux/memblock.h](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/include/linux/memblock.h)헤더 파일에 정의되어 있다.
 
-The first structure has the same name as this part and it is:
+첫 번째 자료구조는 `memblock`이라는 이름 그대로 구조체가 정의되어 있다:
 
 ```C
 struct memblock {
@@ -27,7 +27,8 @@ struct memblock {
 };
 ```
 
-This structure contains five fields. First is `bottom_up` which allows allocating memory in bottom-up mode when it is `true`. Next field is `current_limit`. This field describes the limit size of the memory block. The next three fields describe the type of the memory block. It can be: reserved, memory and physical memory (physical memory is available if the `CONFIG_HAVE_MEMBLOCK_PHYS_MAP` configuration option is enabled). Now we see yet another data structure - `memblock_type`. Let's look at its definition:
+이 구조체에는 5개 변수가 선언되어 있다. 첫 번째 `bottom_up`는 메모리를 아래에서 위로 할당 해 줄 수 있는지 여부를 결정하는 변수이며 맞다면, `true`이다. 다음 변수는 `current_limit`는 메모리 블락의 제한된 크기를 나타낸다. 다음 세 개의 변수들은, 메모리 블락 타입(reserved, memory 그리고 physical memory)을 나타낸다. (타입 중에 physical memory는 `CONFIG_HAVE_MEMBLOCK_PHYS_MAP` 설정이 활성화 되어있어야 가능하다.)
+지금부터 `memblock_type` 자료구조를 보자.
 
 ```C
 struct memblock_type {
