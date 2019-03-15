@@ -1,16 +1,15 @@
-Linux kernel memory management Part 1.
+리눅스 커널 메모리 관리 파트 1.
 ================================================================================
 
-Introduction
+소개
 --------------------------------------------------------------------------------
 
-Memory management is one of the most complex (and I think that it is the most complex) part of the operating system kernel. In the [last preparations before the kernel entry point](https://0xax.gitbooks.io/linux-insides/content/Initialization/linux-initialization-3.html) part we stopped right before call of the `start_kernel` function. This function initializes all the kernel features (including architecture-dependent features) before the kernel runs the first `init` process. You may remember as we built early page tables, identity page tables and fixmap page tables in the boot time. No complicated memory management is working yet. When the `start_kernel` function is called we will see the transition to more complex data structures and techniques for memory management. For a good understanding of the initialization process in the linux kernel we need to have a clear understanding of these techniques. This chapter will provide an overview of the different parts of the linux kernel memory management framework and its API, starting from the `memblock`.
+메모리 관리는 운영체제에서 어려운 부분 중에 하나이다 (나는 제일 어려운 부분이라 생각한다). [커널 엔트리 포인트로 가기 전에 마지막 준비 작업](https://0xax.gitbooks.io/linux-insides/content/Initialization/linux-initialization-3.html) 에서는 `start_kernel` 함수 직전까지 설명하였다. 이 함수는 커널이 `init` 프로세스가 동작하기 전에, 커널의 모든 기능(아키택쳐 의존적인 기능까지 포함)을 초기화한다. 커널은 early page table, fixmap page table 그리고 identity page table을 만든다. 아직 복작한 메모리 관리는 들어가지 않았다. `start_kernel` 함수를 본격적으로 보기 시작하면 메모리 관리를 위한 복잡한 자료구조와 테크닉들을 보게 될 것이다. 커널의 초기화 과정을 좀 더 잘 이해하기 위해서는 이러한 테크닉에 대해서 명확히 이해할 필요가 있다. 이 챕터는 리눅스 `memblock`을 시작으로, 커널의 메모리 관리에 있어서 다양한 프레임워크나 API들에 대해서 알아볼 것이다.
 
 Memblock
 --------------------------------------------------------------------------------
 
-Memblock is one of the methods of managing memory regions during the early bootstrap period while the usual kernel memory allocators are not up and
-running yet. Previously it was called `Logical Memory Block`, but with the [patch](https://lkml.org/lkml/2010/7/13/68) by Yinghai Lu, it was renamed to the `memblock`. As Linux kernel for `x86_64` architecture uses this method. We already met `memblock` in the [Last preparations before the kernel entry point](https://0xax.gitbooks.io/linux-insides/content/Initialization/linux-initialization-3.html) part. And now it's time to get acquainted with it closer. We will see how it is implemented.
+Memblock은 초기 부팅 단계에서 커널의 메모리 할당자가 초기화가 되지 않아 제대로 동작하기 전에, 메모리를 관리하는 방법 중 하나이다. 원래는 `Logical Memory Block`이라는 이름으로 사용되었으나, Yinghai Lu 라는 사람이 만든 [패치](https://lkml.org/lkml/2010/7/13/68) 이후에 `memblock`으로 변경되었다. `x86_64` 아케택쳐를 사용하는 커널이 `memblock`를 사용하기에 [커널 엔트리 포인트로 가기 전에 마지막 준비 작업](https://0xax.gitbooks.io/linux-insides/content/Initialization/linux-initialization-3.html)에서 봤던 적이 있다. 이번에는 어떻게 구현되어있는지 알아보겠다.
 
 We will start to learn `memblock` from the data structures. Definitions of all logical-memory-block-related data structures can be found in the [include/linux/memblock.h](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/include/linux/memblock.h) header file.
 
