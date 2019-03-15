@@ -13,7 +13,6 @@
 모든 게시물들은 [github repo](https://github.com/0xAX/linux-insides)에서 볼 수 있습니다. 그리고 제 영어 실력이나 게시물 내용에서 이상한 것을 찾으면 언제든 풀 리퀘스트를 보내주세요.
 
 *이 게시물은 공식 문서가 아니며, 단지 지식을 배우고 공유하기 위한 것임을 알아두세요.*
-
 **요구 지식**
 
 * C언어를 이해할 수 있는 능력
@@ -27,11 +26,10 @@
 마법의 컴퓨터 전원 버튼을 누르면 무슨 일이 벌어지나요?
 --------------------------------------------------------------------------------
 
-비록 이 시리즈가 리눅스 켜널에 대한 포스트들 일지라도, 우리는 직접 리눅스 커널부터 시작하지는 않을 것입니다.이 패러그래프에서, 당신의 컴퓨터나 노트북에 있는 마법의 전원 버튼을 눌렀을때, 금방 이것은 작동하기 시작합니다.
-메인보드가 파워 서플라이에 신호를 보냅니다. 신호를 받고 나서는, 파워 서플라이는 컴퓨터에 필요한 전력을 제공하기 시작합니다. 일단 메인보드가 Power good Signal을 받고나면, 메인보드는 CPU 시작을 시도합니다.CPU는 모든 레지스터의 데이터를 초기화하고, 각각 미리 정의된 값들을 설정합니다.
-Although this is a series of posts about the Linux kernel, we will not be starting directly from the kernel code - at least not, in this paragraph. As soon as you press the magical power button on your laptop or desktop computer, it starts working. The motherboard sends a signal to the [power supply](https://en.wikipedia.org/wiki/Power_supply) device. After receiving the signal, the power supply provides the proper amount of electricity to the computer. Once the motherboard receives the [power good signal](https://en.wikipedia.org/wiki/Power_good_signal), it tries to start the CPU. The CPU resets all leftover data in its registers and sets up predefined values for each of them.
+비록 이 시리즈의 포스트들이 리눅스 커널에 대한 것일지라도, 우리는 바로 커널 코드부터 시작하지 않을 것입니다. 적어도 이 단락에서는요. 
+컴퓨터나 노트북에 있는 마법의 전원 버튼을 누르면, 컴퓨터와 노트북은 작동하기 시작합니다. 그 후에는 메인보드가 파워 서플라이에 신호를 보냅니다. 신호를 받고 나면, 파워 서플라이는 컴퓨터에 적절한 양의 전력을 제공하기 시작합니다. 메인보드가 Power good signal을 받고나면, 메인보드는 CPU 시작을 시도합니다. CPU는 모든 레지스터에 남아있던 데이터를 초기화하고, 각각에 미리 정의된 값들을 설정합니다. 
 
-The [80386](https://en.wikipedia.org/wiki/Intel_80386) CPU and later define the following predefined data in CPU registers after the computer resets:
+80386 CPU 이상에서 컴퓨터 리셋 이후, CPU 레지스터에 설정될 미리 정의된 값 들은 다음을 따릅니다:
 
 ```
 IP          0xfff0
@@ -39,23 +37,24 @@ CS selector 0xf000
 CS base     0xffff0000
 ```
 
-The processor starts working in [real mode](https://en.wikipedia.org/wiki/Real_mode). Let's back up a little and try to understand [memory segmentation](https://en.wikipedia.org/wiki/Memory_segmentation) in this mode. Real mode is supported on all x86-compatible processors, from the [8086](https://en.wikipedia.org/wiki/Intel_8086) CPU all the way to the modern Intel 64-bit CPUs. The `8086` processor has a 20-bit address bus, which means that it could work with a `0-0xFFFFF` or `1 megabyte` address space. But it only has `16-bit` registers, which have a maximum address of `2^16 - 1` or `0xffff` (64 kilobytes).
+프로세서는 리얼 모드에서 작동을 시작합니다. 조금만 뒤로 돌아가서 이 모드에서의 세그먼테이션에 대해 이해해봅시다. 리얼모드는 모든 x86 호환 프로세서에서 지원합니다, 이는 8086에서부터 인텔 64bit CPU가 나오기 까지의 모든 CPU가 해당됩니다. `8086` 프로세서는 20비트 주소 버스를 가지고 있었고, 이는 곧 `0-0xFFFFF` 또는 `1 메가바이트` 주소 공간으로 동작한다는 뜻입니다. 그러나 8086은 오직 `2^16 - 1` 또는 `0xffff`를 최대 주소로 갖는 `16비트` 레지스터밖에 가지고 있지 않았습니다.
 
-[Memory segmentation](https://en.wikipedia.org/wiki/Memory_segmentation) is used to make use of all the address space available. All memory is divided into small, fixed-size segments of `65536` bytes (64 KB). Since we cannot address memory above `64 KB` with 16-bit registers, an alternate method was devised.
+메모리 세그먼테이션은 사용 가능한 모든 주소 공간을 이용하는데 쓰입니다. 모든 메모리는 `65535` 바이트 (64 KB)의 일정한 크기를 가진 세그먼트로 작게 나누어집니다. 16비트 레지스터로 `64 KB` 이상의 주소는 만들 수 없기 때문에 이러한 대체 방법을 고안하게 되었습니다.
 
-An address consists of two parts: a segment selector, which has a base address, and an offset from this base address. In real mode, the associated base address of a segment selector is `Segment Selector * 16`. Thus, to get a physical address in memory, we need to multiply the segment selector part by `16` and add the offset to it:
+주소는 두 파트로 구성됩니다: 기준 주소를 가지고 있는 세그먼트 셀렉터, 그리고 기준 주소로부터의 오프셋. 리얼모드에서는, 세그먼트 셀렉터의 관련된 기준 주소는 `세그먼트 셀렉터 * 16` 입니다. 따라서 메모리의 물리 주소를 얻기 위해서는, 세그먼트 셀렉터에 16을 곱하고 오프셋을 더해주어야 합니다:
 
 ```
-PhysicalAddress = Segment Selector * 16 + Offset
+물리주소 = 세그먼트 셀렉터 * 16 + 오프셋
 ```
 
-For example, if `CS:IP` is `0x2000:0x0010`, then the corresponding physical address will be:
+예를 들어, 만약 `CS:IP` 가 `0x2000:0x0010`이면, 해당하는 물리주소는 아래와 같습니다:
 
 ```python
 >>> hex((0x2000 << 4) + 0x0010)
 '0x20010'
 ```
 
+하지만, 만약 우리가 `0xffff:0xffff`와 같이 제일 큰 세그먼트 셀렉터와 오프셋을 갖는다면, 결과는 아래와 같을 것 입니다:
 But, if we take the largest segment selector and offset, `0xffff:0xffff`, then the resulting address will be:
 
 ```python
@@ -63,12 +62,16 @@ But, if we take the largest segment selector and offset, `0xffff:0xffff`, then t
 '0x10ffef'
 ```
 
+`65520`바이트는 1메가 바이트를 넘어갑니다. 따라서 1메가바이트만 접근 가능한 리얼모드 에서는, `0x10ffef`는 A20 라인이 비활성화 되어 있을 `0x00ffef` 가 되어버립니다.
 which is `65520` bytes past the first megabyte. Since only one megabyte is accessible in real mode, `0x10ffef` becomes `0x00ffef` with the [A20 line](https://en.wikipedia.org/wiki/A20_line) disabled.
-
+ 
+좋습니다, 이제 우리는 리얼모드와 이 모드에서의 메모리 주소 지정에 대해서 조금이나마 알게 되었습니다. 다시 리셋 이후의 레지스터 값에 대한 논의로 돌아갑시다.
 Ok, now we know a little bit about real mode and memory addressing in this mode. Let's get back to discussing register values after reset.
 
+`CS` 레지스터는 두 파트로 구성됩니다: 보이는 세그먼트 셀렉터, 그리고 숨겨진 기준 주소. 기준 주소는 일반적으로 세그먼트 셀렉터 값에 16을 곱하여 형성되지만, 하드웨어가 리셋되는 동안 CS 레지스터의 세그먼트 셀렉터에는 `0xf0000`가 로드되고, 기준 주소에는 `0xffff0000`이 로드됩니다; 프로세서는 `CS`의 값이 바뀌기 전까지는 이 특별한 기준 주소를 사용합니다.
 The `CS` register consists of two parts: the visible segment selector, and the hidden base address. While the base address is normally formed by multiplying the segment selector value by 16, during a hardware reset the segment selector in the CS register is loaded with `0xf000` and the base address is loaded with `0xffff0000`; the processor uses this special base address until `CS` is changed.
 
+시작 주소는 EIP 레지스터의 값에 기준 주소를 더하는 것으로 형성됩니다.
 The starting address is formed by adding the base address to the value in the EIP register:
 
 ```python
@@ -77,6 +80,7 @@ The starting address is formed by adding the base address to the value in the EI
 ```
 
 We get `0xfffffff0`, which is 16 bytes below 4GB. This point is called the [reset vector](https://en.wikipedia.org/wiki/Reset_vector). This is the memory location at which the CPU expects to find the first instruction to execute after reset. It contains a [jump](https://en.wikipedia.org/wiki/JMP_%28x86_instruction%29) (`jmp`) instruction that usually points to the BIOS entry point. For example, if we look in the [coreboot](https://www.coreboot.org/) source code (`src/cpu/x86/16bit/reset16.inc`), we will see:
+우리는 4GB 아래의 16바이트인 `0xfffffff0`을 얻었습니다. 이 지점은 [리셋 벡터]라고 불립니다. 이곳은 리셋 후 실행해야할 첫 번째 명령어가 있다고 CPU가 예상하는 곳입니다. 이 명령은 [점프] (`jmp`) 명령을 포함하고 있으며, 보통 바이오스 진입 지점으로 쓰입니다. 예를 들어, [coreboot]의 소스코드 (`src/cpu/x86/16bit/reset16.inc`) 를 보겠습니다.:
 
 ```assembly
     .section ".reset", "ax", %progbits
@@ -89,8 +93,10 @@ _start:
 ```
 
 Here we can see the `jmp` instruction [opcode](http://ref.x86asm.net/coder32.html#xE9), which is `0xe9`, and its destination address at `_start16bit - ( . + 2)`.
+여기서 우리는 `0xe9`, 즉 `jmp` 명령을 찾을 수 있습니다, 그리고 이에 대한 목적지 주소는 `_start16bit - ( . + 2)` 입니다.
 
 We can also see that the `reset` section is `16` bytes and that is compiled to start from `0xfffffff0` address (`src/cpu/x86/16bit/reset16.ld`):
+우리는 또한 `rest` 섹션의 `16` 바이트를 볼 수 있습니다. 그리고 그것은 `0xfffffff0`에서 시작하기 위해 컴파일 됩니다. 
 
 ```
 SECTIONS {
@@ -107,7 +113,9 @@ SECTIONS {
 ```
 
 Now the BIOS starts; after initializing and checking the hardware, the BIOS needs to find a bootable device. A boot order is stored in the BIOS configuration, controlling which devices the BIOS attempts to boot from. When attempting to boot from a hard drive, the BIOS tries to find a boot sector. On hard drives partitioned with an [MBR partition layout](https://en.wikipedia.org/wiki/Master_boot_record), the boot sector is stored in the first `446` bytes of the first sector, where each sector is `512` bytes. The final two bytes of the first sector are `0x55` and `0xaa`, which designates to the BIOS that this device is bootable.
+이제 바이오스가 시작되었습니다; 하드웨어 초기화와 검사가 끝난 후, 바이오스는 부팅 가능한 디바이스를 필요로 합니다. 부팅 순서는 BIOS 설정에 저장되어 있으며, BIOS가 부팅을 시도하는 장치를 제어합니다. 하드 드라이브로 부터 부트를 시도할때, 바이오스는 부트 섹터를 찾으려 시도합니다. MBR 형식으로 파티션된 하드 드라이브에서, 각 섹터가 `512` 바이트일때, 부트 섹터는 첫 섹터의 첫 `446` 바이트에 저장됩니다. 첫 섹터의 마지막 두 바이트들은 `0x55`와 `0xaa` 입니다. 이는 BIOS가 부팅 가능한 장치를 식별하기 위해서 디자인 되었습니다.
 
+예를 들어:
 For example:
 
 ```assembly
@@ -131,6 +139,7 @@ db 0x55
 db 0xaa
 ```
 
+빌드하고 실행하면:
 Build and run this with:
 
 ```
