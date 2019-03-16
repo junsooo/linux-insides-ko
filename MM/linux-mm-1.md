@@ -39,7 +39,7 @@ struct memblock_type {
 };
 ```
 
-This structure provides information about the memory type. It contains fields which describe the number of memory regions inside the current memory block, the size of all memory regions, the size of the allocated array of the memory regions, and a pointer to the array of the `memblock_region` structures. `memblock_region` is a structure which describes a memory region. Its definition is:
+이 구조체는 메모리의 타입에 대해서 나타낸다. 각 변수들은 한 메모리 블락내에 있는 메모리 영역의 갯수, 모든 메모리 영역들의 총 사이즈 그리고 할당 된 메모리 영역의 배열 크기를 나타낸다. 마지막으로는 `memblock_region` 구조체의 배열에 대한 포인터를 나타내는 변수가 있다. `memblock_region` 구조체는 메모리 영역을 표현하는 구조체로 아래와 같이 정의되어 있다.
 
 ```C
 struct memblock_region {
@@ -52,7 +52,7 @@ struct memblock_region {
 };
 ```
 
-`memblock_region` provides the base address and size of the memory region as well as a flags field which can have the following values:
+`memblock_region`은 메모리 영역의 시작주소와 크기를 나타내고 있으며, 아래의 값들을 갖는 플래그를 변수로 갖고 있다.
 
 ```C
 enum {
@@ -63,9 +63,9 @@ enum {
 };
 ```
 
-Also `memblock_region` provides an integer field - [numa](http://en.wikipedia.org/wiki/Non-uniform_memory_access) node selector, if the `CONFIG_HAVE_MEMBLOCK_NODE_MAP` configuration option is enabled.
+또한 만약 `CONFIG_HAVE_MEMBLOCK_NODE_MAP` 설정이 활성화 되어 있다면, `memblock_region`은 정수 타입의 변수인 [numa](http://en.wikipedia.org/wiki/Non-uniform_memory_access)를 포함하게 된다.  
 
-Schematically we can imagine it as:
+위에서 간략하게 본 구조체들의 관계를 의미론 적으로 표현하면 아래와 같이 나타낼 수 있다.
 
 ```
 +---------------------------+   +---------------------------+
@@ -83,12 +83,12 @@ Schematically we can imagine it as:
 +---------------------------+   +---------------------------+
 ```
 
-These three structures: `memblock`, `memblock_type` and `memblock_region` are main in the `Memblock`. Now we know about it and can look at Memblock initialization process.
+`Memblock`에서는 `memblock` 구조체, `memblock_type` 구조체 그리고 `memblock_region` 구조체가 제일 주된 구조체들이다. 이제 부터는 메모리 블락의 초기화 과정에 대해서 알아보자.
 
-Memblock initialization
+Memblock 초기화
 --------------------------------------------------------------------------------
 
-As all API of the `memblock` are described in the [include/linux/memblock.h](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/include/linux/memblock.h) header file, all implementations of these functions are in the [mm/memblock.c](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/mm/memblock.c) source code file. Let's look at the top of the source code file and we will see the initialization of the `memblock` structure:
+`memblock`에 관련된 API들에 대해서 선언은 [include/linux/memblock.h](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/include/linux/memblock.h) 헤더파일에서, 정의는 . [mm/memblock.c](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/mm/memblock.c) 파일에서 찾아 볼 수 있다. 소스코드의 처음 시작 부분을 보면, `memblock`구조체의 초기화관련 코드를 찾아 볼 수 있다:
 
 ```C
 struct memblock memblock __initdata_memblock = {
