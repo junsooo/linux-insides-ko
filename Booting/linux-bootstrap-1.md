@@ -13,7 +13,6 @@
 모든 게시물들은 [github repo](https://github.com/0xAX/linux-insides)에서 볼 수 있습니다. 그리고 제 영어 실력이나 게시물 내용에서 이상한 것을 찾으면 언제든 풀 리퀘스트를 보내주세요.
 
 *이 게시물은 공식 문서가 아니며, 단지 지식을 배우고 공유하기 위한 것임을 알아두세요.*
-
 **요구 지식**
 
 * C언어를 이해할 수 있는 능력
@@ -27,9 +26,11 @@
 마법의 컴퓨터 전원 버튼을 누르면 무슨 일이 벌어지나요?
 --------------------------------------------------------------------------------
 
-Although this is a series of posts about the Linux kernel, we will not be starting directly from the kernel code - at least not, in this paragraph. As soon as you press the magical power button on your laptop or desktop computer, it starts working. The motherboard sends a signal to the [power supply](https://en.wikipedia.org/wiki/Power_supply) device. After receiving the signal, the power supply provides the proper amount of electricity to the computer. Once the motherboard receives the [power good signal](https://en.wikipedia.org/wiki/Power_good_signal), it tries to start the CPU. The CPU resets all leftover data in its registers and sets up predefined values for each of them.
+비록 이 시리즈의 포스트들이 리눅스 커널에 대한 것일지라도, 우리는 바로 커널 코드부터 시작하지 않을 것입니다. 적어도 이 단락에서는요. 
 
-The [80386](https://en.wikipedia.org/wiki/Intel_80386) CPU and later define the following predefined data in CPU registers after the computer resets:
+노트북 또는 데스크톱 컴퓨터에 있는 마법의 전원 버튼을 누르면, 컴퓨터와 노트북은 바로 작동하기 시작합니다. 메인보드는 파워 서플라이에 신호를 보냅니다. 신호를 받고 나면, 파워 서플라이는 컴퓨터에 적절한 양의 전력을 제공하기 시작합니다. 메인보드가 [파워 양호 신호(Power good signal)] (https://en.wikipedia.org/wiki/Power_good_signal) 을 받고 나면, 메인보드는 CPU 시작을 시도합니다. CPU는 모든 레지스터에 남아있던 데이터를 초기화하고, 각각에 미리 정의된 값들을 설정합니다. 
+
+80386 CPU 이상에서 컴퓨터 리셋 이후 CPU 레지스터에 들어갈 미리 정의된 값들은 다음을 따릅니다:
 
 ```
 IP          0xfff0
@@ -37,44 +38,47 @@ CS selector 0xf000
 CS base     0xffff0000
 ```
 
-The processor starts working in [real mode](https://en.wikipedia.org/wiki/Real_mode). Let's back up a little and try to understand [memory segmentation](https://en.wikipedia.org/wiki/Memory_segmentation) in this mode. Real mode is supported on all x86-compatible processors, from the [8086](https://en.wikipedia.org/wiki/Intel_8086) CPU all the way to the modern Intel 64-bit CPUs. The `8086` processor has a 20-bit address bus, which means that it could work with a `0-0xFFFFF` or `1 megabyte` address space. But it only has `16-bit` registers, which have a maximum address of `2^16 - 1` or `0xffff` (64 kilobytes).
+프로세서는 [리얼 모드](https://ko.wikipedia.org/wiki/리얼_모드) 에서 작동을 시작합니다. 조금 뒤로 물러나서, 이 모드에서의 [메모리 세그먼트 방식](https://ko.wikipedia.org/wiki/메모리_세그먼트)을 조금만 이해해봅시다. 
+리얼모드는 [8086](https://ko.wikipedia.org/wiki/인텔_8086)에서부터 최신의 인텔 64bit CPU까지, 모든 x86 호환 프로세서에서 지원됩니다. 
+`8086` 프로세서는 20비트 주소 버스를 가지고 있어서, `0-0xFFFFF` 또는 `1 메가바이트` 주소 공간으로 동작할 수 있었습니다. 하지만 8086은 오직 `2^16 - 1`, 또는 `0xffff`(64 KB)의 최대 주소를 갖는 `16비트` 레지스터밖에 가지고 있지 않았습니다.
 
-[Memory segmentation](https://en.wikipedia.org/wiki/Memory_segmentation) is used to make use of all the address space available. All memory is divided into small, fixed-size segments of `65536` bytes (64 KB). Since we cannot address memory above `64 KB` with 16-bit registers, an alternate method was devised.
+[메모리 세그먼트 방식](https://ko.wikipedia.org/wiki/메모리_세그먼트)은 사용 가능한 모든 주소 공간을 이용하는데 쓰였습니다. 모든 메모리는 `65535` 바이트(64 KB) 의 일정한 크기를 가진 작은 세그먼트로 나누어집니다. 16비트 레지스터로는 `64 KB` 이상의 주소를 만들 수 없기 때문에 이러한 대체 방법을 고안하게 되었습니다.
 
-An address consists of two parts: a segment selector, which has a base address, and an offset from this base address. In real mode, the associated base address of a segment selector is `Segment Selector * 16`. Thus, to get a physical address in memory, we need to multiply the segment selector part by `16` and add the offset to it:
+주소는 두 파트로 구성됩니다: 주소를 가지고 있는 세그먼트 셀렉터, 그리고 기준 주소로부터의 오프셋. 리얼모드에서 세그먼트 셀렉터의 관련하는 기준 주소는 `세그먼트 셀렉터 * 16` 입니다. 따라서 메모리의 물리 주소를 얻기 위해서는, 이것에 세그먼트 셀렉터에 16을 곱하고 오프셋을 더해주어야 합니다:
 
 ```
-PhysicalAddress = Segment Selector * 16 + Offset
+물리주소 = 세그먼트 셀렉터 * 16 + 오프셋
 ```
 
-For example, if `CS:IP` is `0x2000:0x0010`, then the corresponding physical address will be:
+예를 들어, 만약 `CS:IP` 가 `0x2000:0x0010`이면, 해당하는 물리주소는 아래와 같습니다:
 
 ```python
 >>> hex((0x2000 << 4) + 0x0010)
 '0x20010'
 ```
 
-But, if we take the largest segment selector and offset, `0xffff:0xffff`, then the resulting address will be:
+하지만, 만약 우리가 `0xffff:0xffff`와 같이 가장 큰 세그먼트 셀렉터와 오프셋을 갖는다면, 결과는 이렇게 될 것 입니다:
 
 ```python
 >>> hex((0xffff << 4) + 0xffff)
 '0x10ffef'
 ```
 
-which is `65520` bytes past the first megabyte. Since only one megabyte is accessible in real mode, `0x10ffef` becomes `0x00ffef` with the [A20 line](https://en.wikipedia.org/wiki/A20_line) disabled.
+`65520` 바이트가 첫 메가바이트를 넘어가 버립니다. 따라서 오직 1MB까지만 접근 가능한 리얼모드에서, [A20 라인](https://en.wikipedia.org/wiki/A20_line)이 비활성화 되어 있을때 `0x10ffef`는 `0x00ffef`가 되어버립니다.
+ 
+좋습니다, 이제 우리는 리얼모드와 이 모드에서의 메모리 주소 지정에 대해서 조금 알게 되었습니다. 다시 리셋 이후의 레지스터 값에 대한 논의로 돌아갑시다.
 
-Ok, now we know a little bit about real mode and memory addressing in this mode. Let's get back to discussing register values after reset.
+`CS` 레지스터는 두 파트로 구성됩니다: 보이는 세그먼트 셀렉터(visible segment selector), 그리고 숨겨진 기준 주소(hidden base address). 기준 주소는 일반적으로 세그먼트 셀렉터 값에 16을 곱하여 형성되지만, 하드웨어가 리셋되는 동안에는 CS 레지스터의 세그먼트 셀렉터에 `0xf0000`가 로드되고, 기준 주소에는 `0xffff0000`이 로드됩니다; 프로세서는 `CS`의 값이 바뀌기 전까지는 이 특별한 기준 주소를 사용합니다.
 
-The `CS` register consists of two parts: the visible segment selector, and the hidden base address. While the base address is normally formed by multiplying the segment selector value by 16, during a hardware reset the segment selector in the CS register is loaded with `0xf000` and the base address is loaded with `0xffff0000`; the processor uses this special base address until `CS` is changed.
+시작 주소는 EIP 레지스터의 값에 기준 주소를 더함으로써 형성됩니다.
 
-The starting address is formed by adding the base address to the value in the EIP register:
 
 ```python
 >>> 0xffff0000 + 0xfff0
 '0xfffffff0'
 ```
 
-We get `0xfffffff0`, which is 16 bytes below 4GB. This point is called the [reset vector](https://en.wikipedia.org/wiki/Reset_vector). This is the memory location at which the CPU expects to find the first instruction to execute after reset. It contains a [jump](https://en.wikipedia.org/wiki/JMP_%28x86_instruction%29) (`jmp`) instruction that usually points to the BIOS entry point. For example, if we look in the [coreboot](https://www.coreboot.org/) source code (`src/cpu/x86/16bit/reset16.inc`), we will see:
+우리는 4GB의 16바이트 아래인 `0xfffffff0`을 얻었습니다. 이 지점은 [리셋 벡터](https://en.wikipedia.org/wiki/Reset_vector)라고 불립니다. 이곳은 CPU가 리셋 후 실행할 첫 번째 명령어가 있을 것이라 예상하는 메모리 위치입니다. 이 명령은 보통 BIOS 진입 지점을 가리키고 있는 [점프](https://en.wikipedia.org/wiki/JMP_%28x86_instruction%29) (`jmp`) 명령을 포함하고 있습니다. 예로써 [coreboot](https://www.coreboot.org/)의 소스코드(`src/cpu/x86/16bit/reset16.inc`)를 보면, 우리는 다음과 같은 코드를 볼 수 있습니다.:
 
 ```assembly
     .section ".reset", "ax", %progbits
@@ -86,9 +90,9 @@ _start:
     ...
 ```
 
-Here we can see the `jmp` instruction [opcode](http://ref.x86asm.net/coder32.html#xE9), which is `0xe9`, and its destination address at `_start16bit - ( . + 2)`.
+여기서 우리는 `jmp` 명령어의 [기계어 코드](http://ref.x86asm.net/coder32.html#xE9)인 `0xe9`를 볼 수 있습니다, 그리고 목적지 주소는 `_start16bit - ( . + 2)` 입니다.
 
-We can also see that the `reset` section is `16` bytes and that is compiled to start from `0xfffffff0` address (`src/cpu/x86/16bit/reset16.ld`):
+우리는 또한 `rest` 섹션의 `16` 바이트를 볼 수 있습니다. 그리고 그것은 `0xfffffff0` 주소에서 시작하기 위해 컴파일 됩니다. (`src/cpu/x86/16bit/reset16.ld`):
 
 ```
 SECTIONS {
@@ -104,9 +108,9 @@ SECTIONS {
 }
 ```
 
-Now the BIOS starts; after initializing and checking the hardware, the BIOS needs to find a bootable device. A boot order is stored in the BIOS configuration, controlling which devices the BIOS attempts to boot from. When attempting to boot from a hard drive, the BIOS tries to find a boot sector. On hard drives partitioned with an [MBR partition layout](https://en.wikipedia.org/wiki/Master_boot_record), the boot sector is stored in the first `446` bytes of the first sector, where each sector is `512` bytes. The final two bytes of the first sector are `0x55` and `0xaa`, which designates to the BIOS that this device is bootable.
+이제 바이오스가 시작되었습니다; 하드웨어 초기화와 검사가 끝난 후에, 바이오스는 부팅 가능한 디바이스를 찾아야 합니다. 부팅 순서는 BIOS 설정에 저장되어 있으며, BIOS가 부팅을 시도하는 장치를 제어합니다. 하드 드라이브로부터 부팅을 시도할때, 바이오스는 부트 섹터를 찾으려 시도합니다. [MBR 파티션 레이아웃](https://ko.wikipedia.org/wiki/마스터_부트_레코드) 으로 파티션된 하드 드라이브에서 각 섹터가 `512` 바이트일때, 부트 섹터는 첫 섹터의 첫 `446` 바이트에 저장됩니다. 첫 섹터의 마지막 두 바이트는 `0x55`와 `0xaa` 입니다. 이는 BIOS에게 부팅 가능한 장치라는 것을 알려주기 위해 디자인 되었습니다.
 
-For example:
+예를 들어:
 
 ```assembly
 ;
@@ -129,78 +133,79 @@ db 0x55
 db 0xaa
 ```
 
-Build and run this with:
+이렇게 빌드하고 실행하면:
 
 ```
 nasm -f bin boot.nasm && qemu-system-x86_64 boot
 ```
 
-This will instruct [QEMU](http://qemu.org) to use the `boot` binary that we just built as a disk image. Since the binary generated by the assembly code above fulfills the requirements of the boot sector (the origin is set to `0x7c00` and we end with the magic sequence), QEMU will treat the binary as the master boot record (MBR) of a disk image.
+이를 통해 QEMU에게 디스크 이미지로 방금 우리가 만든 부팅 바이너리를 사용하도록 지시할 수 있습니다. 어셈블리 코드에 의해 생성된 바이너리는 부트 섹터의 요구사항(위치 카운터가 `0x7c00` 설정 되었으며, 매직 시퀀스로 끝남)을 충족하기 때문에, QEMU는 이 바이너리를 디스크 이미지의 마스터 부트 레코드 (MBR)로 다룹니다.
 
+당신은 아래와 같이 보게 될것입니다:
 You will see:
 
 ![Simple bootloader which prints only `!`](http://oi60.tinypic.com/2qbwup0.jpg)
 
-In this example, we can see that the code will be executed in `16-bit` real mode and will start at `0x7c00` in memory. After starting, it calls the [0x10](http://www.ctyme.com/intr/rb-0106.htm) interrupt, which just prints the `!` symbol; it fills the remaining `510` bytes with zeros and finishes with the two magic bytes `0xaa` and `0x55`.
+이 예제에서, 우리는 코드가 `16-bit` 리얼 모드에서 실행되며, 메모리의 `0x7c00`에서 시작한다는 것을 알 수 있습니다. 시작하고 난 후, 코드는 단순히 `!`를 출력하는 [0x10](http://wwww.ctyme.com/intr/rb-0106.htm) 인터럽트를 호출합니다; 나머지 `510` 바이트를 0으로 채우고, 매직 바이트 `0xaa`와 `0x55`로 끝납니다.
 
-You can see a binary dump of this using the `objdump` utility:
+당신은 `objdump` 유틸리티를 사용하여 바이너리 덤프를 볼 수 있습니다.:
 
 ```
 nasm -f bin boot.nasm
 objdump -D -b binary -mi386 -Maddr16,data16,intel boot
 ```
 
-A real-world boot sector has code for continuing the boot process and a partition table instead of a bunch of 0's and an exclamation mark :) From this point onwards, the BIOS hands over control to the bootloader.
+실제 부트 섹터는 많은 0과 감탄사 대신에 부팅 프로세스와 파티션 테이블을 계속하기 위한 코드를 가지고 있습니다. 이 시점부터 BIOS는 부트로더에게 제어를 넘겨줍니다.
 
-**NOTE**: As explained above, the CPU is in real mode; in real mode, calculating the physical address in memory is done as follows:
+**주**: 위에 설명되어 있듯이, CPU는 리얼모드에 있습니다; 리얼모드에서는, 물리주소를 계산하기 위해 아래의 공식을 따릅니다:
 
 ```
 PhysicalAddress = Segment Selector * 16 + Offset
 ```
 
-just as explained above. We have only 16-bit general purpose registers; the maximum value of a 16-bit register is `0xffff`, so if we take the largest values, the result will be:
+위에 설명한 것과 똑같습니다. 우리는 16비트 범용 레지스터밖에 가지고 있지 않습니다.; 16비트 레지스터의 최대 값은 `0xffff`입니다. 따라서 우리가 가장 큰 값을 가진다면, 결과는 다음과 같이 될 것입니다:
 
 ```python
 >>> hex((0xffff * 16) + 0xffff)
 '0x10ffef'
 ```
 
-where `0x10ffef` is equal to `1MB + 64KB - 16b`. An [8086](https://en.wikipedia.org/wiki/Intel_8086) processor (which was the first processor with real mode), in contrast, has a 20-bit address line. Since `2^20 = 1048576` is 1MB, this means that the actual available memory is 1MB.
+여기서 `0x10ffef`는 `1MB + 64KB - 16b` 와 같습니다. [8086]((https://ko.wikipedia.org/wiki/인텔_8086) 프로세서 (리얼 모드를 지원하는 첫 번째 프로세서)는 그에 반해서, 20비트 주소 라인을 가지고 있었습니다. 따라서 `2^20 = 104876` 은 1MB 이므로, 사실상 사용 가능한 메모리가 1MB 라는 뜻이 됩니다.
 
-In general, real mode's memory map is as follows:
-
-```
-0x00000000 - 0x000003FF - Real Mode Interrupt Vector Table
-0x00000400 - 0x000004FF - BIOS Data Area
-0x00000500 - 0x00007BFF - Unused
-0x00007C00 - 0x00007DFF - Our Bootloader
-0x00007E00 - 0x0009FFFF - Unused
-0x000A0000 - 0x000BFFFF - Video RAM (VRAM) Memory
-0x000B0000 - 0x000B7777 - Monochrome Video Memory
-0x000B8000 - 0x000BFFFF - Color Video Memory
-0x000C0000 - 0x000C7FFF - Video ROM BIOS
-0x000C8000 - 0x000EFFFF - BIOS Shadow Area
-0x000F0000 - 0x000FFFFF - System BIOS
-```
-
-In the beginning of this post, I wrote that the first instruction executed by the CPU is located at address `0xFFFFFFF0`, which is much larger than `0xFFFFF` (1MB). How can the CPU access this address in real mode? The answer is in the [coreboot](https://www.coreboot.org/Developer_Manual/Memory_map) documentation:
+일반적으로, 리얼 모드의 메모리 맵은 다음과 같습니다:
 
 ```
-0xFFFE_0000 - 0xFFFF_FFFF: 128 kilobyte ROM mapped into address space
+0x00000000 - 0x000003FF - 리얼 모드 인터럽트 벡터 테이블
+0x00000400 - 0x000004FF - BIOS 데이터 구역 
+0x00000500 - 0x00007BFF - 사용되지 않음 (Unused)
+0x00007C00 - 0x00007DFF - 우리의 부트로더 
+0x00007E00 - 0x0009FFFF - 사용되지 않음 (Unused)
+0x000A0000 - 0x000BFFFF - 비디오 램 메모리 (VRAM)
+0x000B0000 - 0x000B7777 - 흑백 비디오 메모리 
+0x000B8000 - 0x000BFFFF - 컬러 비디오 메모리
+0x000C0000 - 0x000C7FFF - 비디오 롬 BIOS (Video ROM BIOS)
+0x000C8000 - 0x000EFFFF - BIOS 그림자 구역 (BIOS Shadow Area)
+0x000F0000 - 0x000FFFFF - 시스템 BIOS
 ```
 
-At the start of execution, the BIOS is not in RAM, but in ROM.
+이 글의 시작에서, 저는 CPU에서 실행되는 첫 번째 명령어가 `0xFFFFFFF0`에 위치한다고 했었습니다, 이는 `0xFFFFF` (1MB) 보다 더 큰 주소입니다. CPU는 리얼모드에서 어떻게 이 주소에 접근하는 것일까요? 정답은 [coreboot](https://wwww.coreboot.org/Developer_Manual/Memory_map) 문서에 있습니다.
 
-Bootloader
+```
+0xFFFE_0000 - 0xFFFF_FFFF: 128 킬로바이트 롬이 주소 공간에 맵핑됨 (128 kilobyte ROM mapped into address space)
+```
+
+실행이 시작되었을 때, BIOS는 RAM이 아닌 ROM에 위치합니다.
+
+
+부트로더
 --------------------------------------------------------------------------------
+[GRUB 2](https://wwww.gnu.org/software/grub/)와 [syslinux](http://www.syslinux.org/wiki/index.php/The_Syslinux_Project)와 같이 리눅스를 부팅시킬 수 있는 많은 부트로더가 있습니다. 리눅스 커널은 리눅스 지원 시행을 위해 부트로더의 요구사항을 명시해놓은 [부트 프로토콜(Boot protocol)](https://github.com/torvalds/linux/blob/v4.16/Documentation/x86/boot.txt)을 가지고 있습니다. 이 예제에서는 GRUB2를 설명 할 것입니다.
 
-There are a number of bootloaders that can boot Linux, such as [GRUB 2](https://www.gnu.org/software/grub/) and [syslinux](http://www.syslinux.org/wiki/index.php/The_Syslinux_Project). The Linux kernel has a [Boot protocol](https://github.com/torvalds/linux/blob/v4.16/Documentation/x86/boot.txt) which specifies the requirements for a bootloader to implement Linux support. This example will describe GRUB 2.
+계속하기 전에, `BIOS`가 부팅 장치를 선택하고 부트 섹터 코드로 제어권을 넘겨준 지금, 실행은 [boot.img](http://git.savannah.gnu.org/gitweb/?p=grub.git;a=blob;f=grub-core/boot/i386/pc/boot.S;hb=HEAD)에서 시작합니다. 이 코드는 공간의 제한으로 인해 매우 간단하며, GRUB2 코어 이미지의 위치로 점프하는데 사용하기 위한 포인터를 포함하고 있습니다. 코어 이미지는 [diskboot.img](http://git.savannah.gnu.org/gitweb/?p=grub.git;a=blob;f=grub-core/boot/i386/pc/diskboot.S;hb=HEAD)로 시작하는데, 이 이미지는 보통 첫 번째 파티션 이전의 사용되지 않는 공간(unused space) 첫 번째 섹터 바로 뒤에 저장됩니다. 위의 코드는 GRUB2의 커널과 파일 시스템 처리를 위한 드라이버를 포함하고 있는 나머지 코드 이미지를 메모리에 로드합니다. 나머지 코드의 로딩 이후에는 [grub_main](http://git.savannah.gnu.org/gitweb/?p=grub.git;a=blob;f=grub-core/kern/main.c) 함수를 실행시킵니다.
 
-Continuing from before, now that the `BIOS` has chosen a boot device and transferred control to the boot sector code, execution starts from [boot.img](http://git.savannah.gnu.org/gitweb/?p=grub.git;a=blob;f=grub-core/boot/i386/pc/boot.S;hb=HEAD). This code is very simple, due to the limited amount of space available, and contains a pointer which is used to jump to the location of GRUB 2's core image. The core image begins with [diskboot.img](http://git.savannah.gnu.org/gitweb/?p=grub.git;a=blob;f=grub-core/boot/i386/pc/diskboot.S;hb=HEAD), which is usually stored immediately after the first sector in the unused space before the first partition. The above code loads the rest of the core image, which contains GRUB 2's kernel and drivers for handling filesystems, into memory. After loading the rest of the core image, it executes the [grub_main](http://git.savannah.gnu.org/gitweb/?p=grub.git;a=blob;f=grub-core/kern/main.c) function.
+`grub_main` 함수는 콘솔을 초기화하고, 모듈을 위한 기준 주소를 얻고, 루트 디바이스 설정하며, grub 설정 파일 로드/분석하고, 모듈 로드 등을 합니다. 실행이 끝나면 `grub_main` 함수가 grub를 normal mode로 이동시킵니다. `grub_normal_execute` 함수 (`grub-core/normal/main.c`의 소스코드 파일에 위치)는 최종 준비를 완료하고 운영체제 선택을 위한 메뉴를 보여줍니다. 우리가 grub 메뉴 항목들 중 하나를 선택하면 `grub_menu_excecute_entry` 함수가 실행되어 grub `boot` 명령을 실행하고 선택한 운영체제를 부팅합니다.
 
-The `grub_main` function initializes the console, gets the base address for modules, sets the root device, loads/parses the grub configuration file, loads modules, etc. At the end of execution, the `grub_main` function moves grub to normal mode. The `grub_normal_execute` function (from the `grub-core/normal/main.c` source code file) completes the final preparations and shows a menu to select an operating system. When we select one of the grub menu entries, the `grub_menu_execute_entry` function runs, executing the grub `boot` command and booting the selected operating system.
-
-As we can read in the kernel boot protocol, the bootloader must read and fill some fields of the kernel setup header, which starts at the `0x01f1` offset from the kernel setup code. You may look at the boot [linker script](https://github.com/torvalds/linux/blob/v4.16/arch/x86/boot/setup.ld) to confirm the value of this offset. The kernel header [arch/x86/boot/header.S](https://github.com/torvalds/linux/blob/v4.16/arch/x86/boot/header.S) starts from:
+우리가 커널 부트 프로토콜(kernel boot protocol)에서 읽을 수 있듯이, 부트로더는 반드시 커널 설정 코드(kernel setup code)의 `0x01f1` 오프셋에서 시작하는 커널 설정 헤더(kernel setup header)의 일부 필드를 읽고 채워야 합니다. 당신은 부트 [링커 스크립트](https://github.com/torvalds/linux/blob/v4.16/arch/x86/boot/setup.ld) 에서 이 오프셋의 값을 확인할 수 있습니다. 커널 헤더[arch/x86/boot/header.S](https://github.com/torvalds/linux/blob/v4.16/arch/x86/boot/header.S)는 다음과 같이 시작합니다.
 
 ```assembly
     .globl hdr
@@ -214,10 +219,11 @@ hdr:
     boot_flag:   .word 0xAA55
 ```
 
-The bootloader must fill this and the rest of the headers (which are only marked as being type `write` in the Linux boot protocol, such as in [this example](https://github.com/torvalds/linux/blob/v4.16/Documentation/x86/boot.txt#L354)) with values which it has either received from the command line or calculated during boot. (We will not go over full descriptions and explanations for all fields of the kernel setup header now, but we shall do so when we discuss how the kernel uses them; you can find a description of all fields in the [boot protocol](https://github.com/torvalds/linux/blob/v4.16/Documentation/x86/boot.txt#L156).)
+부트로더는 반드시 이 것과 헤더의 나머지 부분(Linux 부트 프로토콜에서 오직 `wrtie` 타입으로 표시된 것만, [이 예시와 같이](https://github.com/torvalds/linux/blob/v4.16/Documentation/x86/boot.txt#L354)) 을 커맨드 라인으로부터 받았거나 부팅 중에 계산된 값으로 채워야 합니다. (지금은 커널 설정 헤더의 모든 필드에 대한 모든 설명을 하지는 않을 것입니다, 하지만 우리는 커널이 이것을 어떻게 사용하는지에 대해 논의할 때 할 것입니다; 모든 필드에 대한 설명은 [부트 프로토콜](https://github.com/torvalds/linux/blob/v4.16/Documentation/x86/boot.txt#L156)에서 찾을 수 있습니다.)
 
-As we can see in the kernel boot protocol, the memory will be mapped as follows after loading the kernel:
 
+커널 부트 프로토콜에서 볼 수 있듯이, 커널이 로딩된 후 메모리는 이렇게 맵핑 될 것입니다.
+-------------------------------------------------------------------------------------------------------------------
 ```shell
          | Protected-mode kernel  |
 100000   +------------------------+
