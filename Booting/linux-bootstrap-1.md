@@ -205,7 +205,7 @@ PhysicalAddress = Segment Selector * 16 + Offset
 
 `grub_main` 함수는 콘솔을 초기화하고, 모듈을 위한 기준 주소를 얻고, 루트 디바이스 설정하며, grub 설정 파일 로드/분석하고, 모듈 로드 등을 합니다. 실행이 끝나면 `grub_main` 함수가 grub를 normal mode로 이동시킵니다. `grub_normal_execute` 함수 (`grub-core/normal/main.c`의 소스코드 파일에 위치)는 최종 준비를 완료하고 운영체제 선택을 위한 메뉴를 보여줍니다. 우리가 grub 메뉴 항목들 중 하나를 선택하면 `grub_menu_excecute_entry` 함수가 실행되어 grub `boot` 명령을 실행하고 선택한 운영체제를 부팅합니다.
 
-우리가 커널 부트 프로토콜(kernel boot protocol)에서 읽을 수 있듯이, 부트로더는 반드시 커널 설정 코드(kernel setup code)의 `0x01f1` 오프셋에서 시작하는 커널 설정 헤더(kernel setup header)의 일부 필드를 읽고 채워야 합니다. 당신은 부트 [링커 스크립트](https://github.com/torvalds/linux/blob/v4.16/arch/x86/boot/setup.ld) 에서 이 오프셋의 값을 확인할 수 있습니다. 커널 헤더[arch/x86/boot/header.S](https://github.com/torvalds/linux/blob/v4.16/arch/x86/boot/header.S)는 다음과 같이 시작합니다.
+우리가 커널 부트 프로토콜(kernel boot protocol)에서 읽을 수 있듯이, 부트로더는 반드시 커널 구성 코드(kernel setup code)의 `0x01f1` 오프셋에서 시작하는 커널 구성 헤더(kernel setup header)의 일부 필드를 읽고 채워야 합니다. 당신은 부트 [링커 스크립트](https://github.com/torvalds/linux/blob/v4.16/arch/x86/boot/setup.ld) 에서 이 오프셋의 값을 확인할 수 있습니다. 커널 헤더[arch/x86/boot/header.S](https://github.com/torvalds/linux/blob/v4.16/arch/x86/boot/header.S)는 다음과 같이 시작합니다.
 
 ```assembly
     .globl hdr
@@ -219,63 +219,72 @@ hdr:
     boot_flag:   .word 0xAA55
 ```
 
-부트로더는 반드시 이 것과 헤더의 나머지 부분(Linux 부트 프로토콜에서 오직 `wrtie` 타입으로 표시된 것만, [이 예시와 같이](https://github.com/torvalds/linux/blob/v4.16/Documentation/x86/boot.txt#L354)) 을 커맨드 라인으로부터 받았거나 부팅 중에 계산된 값으로 채워야 합니다. (지금은 커널 설정 헤더의 모든 필드에 대한 모든 설명을 하지는 않을 것입니다, 하지만 우리는 커널이 이것을 어떻게 사용하는지에 대해 논의할 때 할 것입니다; 모든 필드에 대한 설명은 [부트 프로토콜](https://github.com/torvalds/linux/blob/v4.16/Documentation/x86/boot.txt#L156)에서 찾을 수 있습니다.)
+부트로더는 반드시 이 것과 헤더의 나머지 부분(Linux 부트 프로토콜에서 오직 `wrtie` 타입으로 표시된 것만, [이 예시와 같이](https://github.com/torvalds/linux/blob/v4.16/Documentation/x86/boot.txt#L354)) 을 커맨드 라인으로부터 받았거나 부팅 중에 계산된 값으로 채워야 합니다. (지금은 커널 구성 헤더의 모든 필드에 대한 모든 설명을 하지는 않을 것입니다, 하지만 우리는 커널이 이것을 어떻게 사용하는지에 대해 논의할 때 할 것입니다; 모든 필드에 대한 설명은 [부트 프로토콜](https://github.com/torvalds/linux/blob/v4.16/Documentation/x86/boot.txt#L156)에서 찾을 수 있습니다.)
 
 
 커널 부트 프로토콜에서 볼 수 있듯이, 커널이 로딩된 후 메모리는 이렇게 맵핑 될 것입니다.
 -------------------------------------------------------------------------------------------------------------------
-```shell
-         | Protected-mode kernel  |
+```셸
+         | 보호모드 커널           |
 100000   +------------------------+
-         | I/O memory hole        |
+         | 입출력 메모리 홀        |
 0A0000   +------------------------+
-         | Reserved for BIOS      | Leave as much as possible unused
+         | BIOS를 위해 제공됨      | 가능한 한 많이 사용하지 말고 미사용으로 내버려 두세요.
          ~                        ~
-         | Command line           | (Can also be below the X+10000 mark)
+         | 커맨드 라인             | (X+10000 표시 이하일 수도 있습니다.)
 X+10000  +------------------------+
-         | Stack/heap             | For use by the kernel real-mode code.
+         | 스택 / 힙               | 커널 리얼모드를 위해 사용 됩니다.
 X+08000  +------------------------+
-         | Kernel setup           | The kernel real-mode code.
-         | Kernel boot sector     | The kernel legacy boot sector.
+         | 커널 구성               | 커널 리얼모드 코드.
+         | 커널 부트 섹터          | 기존 부트 섹터 커널.
        X +------------------------+
-         | Boot loader            | <- Boot sector entry point 0x7C00
+         | 부트로더                | <- 부트 섹터 진입 지점 0x7C00
 001000   +------------------------+
-         | Reserved for MBR/BIOS  |
+         | MBR/BIOS를 위해 제공됨  |
 000800   +------------------------+
-         | Typically used by MBR  |
+         | 일반적으로 MBR에게 사용됨|
 000600   +------------------------+
-         | BIOS use only          |
+         | BIOS만 사용 가능        |
 000000   +------------------------+
 
 ```
 
+자, 부트로더가 커널에게서 제어권을 넘겨 받았을 때에는 여기서 부터 시작합니다:
 So, when the bootloader transfers control to the kernel, it starts at:
 
 ```
 X + sizeof(KernelBootSector) + 1
 ```
 
+여기서 X는 로드되고 있는 커널 부트 섹터의 주소입니다. 제 경우에는 메모리 덤프에서 볼 수 있듯이 `X`는 `0x10000`입니다.
 where `X` is the address of the kernel boot sector being loaded. In my case, `X` is `0x10000`, as we can see in a memory dump:
 
+![커널 첫 번째 주소](http://oi57.tinypic.com/16bkco2.jpg)
 ![kernel first address](http://oi57.tinypic.com/16bkco2.jpg)
 
+이제 부트로더는 리눅스 커널을 메모리에 로드했습니다, 헤더 필드들을 채웠고, 그러고 나서는 해당하는 메모리 주소로 점프했습니다. 우리는 이제 바로 커널 구성 코드로 이동 할 수 있습니다.
 The bootloader has now loaded the Linux kernel into memory, filled the header fields, and then jumped to the corresponding memory address. We can now move directly to the kernel setup code.
 
-The Beginning of the Kernel Setup Stage
+커널 구성 단계의 시작
 --------------------------------------------------------------------------------
+
+마침내, 저희가 커널에 있습니다! 기술적으로, 아직 커널은 실행되지 않았지만요; 첫번째로 커널 구성 부분은 반드시 압축해제, 그리고 몇몇 메모리 관리와 관련된 것과 같은 것들을 설정해야 합니다. 이 모든 것들이 끝난 후에, 커널 구성 부분은 실제 커널을 압축 해제하고 그곳으로 점프할 것입니다. 구성 부분의 실행은 [arch/x86/boot/header.S](https://github.com/torvalds/linux/blob/v4.16/arch/x86/boot/header.S) 의 [_start](https://github.com/torvalds/linux/blob/v4.16/arch/x86/boot/header.S#L292) 심볼에서 시작합니다.
 
 Finally, we are in the kernel! Technically, the kernel hasn't run yet; first, the kernel setup part must configure stuff such as the decompressor and some memory management related things, to name a few. After all these things are done, the kernel setup part will decompress the actual kernel and jump to it. Execution of the setup part starts from [arch/x86/boot/header.S](https://github.com/torvalds/linux/blob/v4.16/arch/x86/boot/header.S) at the [_start](https://github.com/torvalds/linux/blob/v4.16/arch/x86/boot/header.S#L292) symbol.
 
+이 전의 몇 가지 지침들이 처음 볼 때는 좀 이상하게 보일 수도 있습니다. 오래 전에 리눅스 커널은 자체 부트로더를 가지고 있었습니다. 하지만 지금, 예를 들어 아래 명령어를 실행하면.
 It may looks a little bit strange at first sight, as there are several instructions before it. A long time ago, the Linux kernel used to have its own bootloader. Now, however, if you run, for example,
 
 ```
 qemu-system-x86_64 vmlinuz-3.18-generic
 ```
 
+이런걸 볼 수 있습니다:
 then you will see:
 
 ![Try vmlinuz in qemu](http://oi60.tinypic.com/r02xkz.jpg)
 
+사실, `header.S` 파일은 매직 넘버[MZ](https://en.wikipedia.org/wiki/DOS_MZ_executable) (위에 사진을 보세요) 로 시작합니다. 에러 메세지는 그걸 보여줍니다. [PE](https://en.wikipedia.org/wiki/Portable_Executable) 헤더:
 Actually, the file `header.S` starts with the magic number [MZ](https://en.wikipedia.org/wiki/DOS_MZ_executable) (see image above), the error message that displays and, following that, the [PE](https://en.wikipedia.org/wiki/Portable_Executable) header:
 
 ```assembly
@@ -292,8 +301,10 @@ pe_header:
     .word 0
 ```
 
+이것은 운영체제를 [UEFI](https://en.wikipedia.org/wiki/Unified_Extensible_Firmware_Interface)로 로드하려면 필요한 것입니다. 저희는 지금 당장 그게 어떻게 동작하는지 들여다 보진 않을 것이고, 다음 장에서 그것에 대해 다룰 것입니다.
 It needs this to load an operating system with [UEFI](https://en.wikipedia.org/wiki/Unified_Extensible_Firmware_Interface) support. We won't be looking into its inner workings right now and will cover it in upcoming chapters.
 
+실제 커널 구성 진입 지점은 아래와 같습니다:
 The actual kernel setup entry point is:
 
 ```assembly
@@ -302,6 +313,7 @@ The actual kernel setup entry point is:
 _start:
 ```
 
+사실 `header.S`가 오류 메세지를 출력하는 `.bstext`섹션에서 부터 시작해도, 부트로더(grub2와 기타 등등)는 이 지점(`MZ`로부터 `0x200` 오프셋)을 알고 바로 점프합니다.  
 The bootloader (grub2 and others) knows about this point (at an offset of `0x200` from `MZ`) and makes a jump directly to it, despite the fact that `header.S` starts from the `.bstext` section, which prints an error message:
 
 ```
@@ -313,6 +325,7 @@ The bootloader (grub2 and others) knows about this point (at an offset of `0x200
 .bsdata : { *(.bsdata) }
 ```
 
+커널 구성 지점 포인터는:
 The kernel setup entry point is:
 
 ```assembly
@@ -325,17 +338,21 @@ _start:
     // rest of the header
     //
 ```
-
+ 
+우리는 여기서 `start_of_setup-1f` 지점으로 점프하는 `jmp` 명령의 기계어 코드(`0xeb`) 를 볼 수 있습니다. `Nf` 표기법에서 `2f`는 로컬 레이블인 `2:` 를 지칭하는 것입니다. 우리의 경우에는 점프 직후 나오는 레이블 `1` 이며, 이는 나머지의 구성 [헤더
+](https://github.com/torvalds/linux/blob/v4.16/Documentation/x86/boot.txt#L156)를 포함하고 있습니다. 구성 헤더 바로 뒤에서, 우리는 `start_of_setup` 라벨에서 시작하는 `.entrytext` 섹션을 확인할 수 있습니다.
 Here we can see a `jmp` instruction opcode (`0xeb`) that jumps to the `start_of_setup-1f` point. In `Nf` notation, `2f`, for example, refers to the local label `2:`; in our case, it is the label `1` that is present right after the jump, and it contains the rest of the setup [header](https://github.com/torvalds/linux/blob/v4.16/Documentation/x86/boot.txt#L156). Right after the setup header, we see the `.entrytext` section, which starts at the `start_of_setup` label.
 
+이것은 실질적으로 실행되는(당연히 이전의 점프 명령과는 별개입니다.) 첫 코드입니다. 커널 구성 부분이 부트로더부터 제어권을 넘겨 받으면, 첫 번째 `jmp` 명령이 커널 리얼모드 시작 지점(즉, 첫 512바이트 이후)부터 `0x200` 오프셋에 위치합니다. 이것은 Linux 커널 부트 프로토콜과 grub2 소스코드 모두에서 확인할 수 있습니다.
 This is the first code that actually runs (aside from the previous jump instructions, of course). After the kernel setup part receives control from the bootloader, the first `jmp` instruction is located at the `0x200` offset from the start of the kernel real mode, i.e., after the first 512 bytes. This can be seen in both the Linux kernel boot protocol and the grub2 source code:
 
-```C
+```
 segment = grub_linux_real_target >> 4;
 state.gs = state.fs = state.es = state.ds = state.ss = segment;
 state.cs = segment + 0x20;
 ```
 
+제 경우에, 커널은 `0x10000`에 로드 되었습니다. 말인 즉슨, 세그먼트 레지스터는 반드시 커널 구성 시작 이후에 다음과 같은 값을 가질 것이라는 것입니다:
 In my case, the kernel is loaded at `0x10000` address. This means that segment registers will have the following values after kernel setup starts:
 
 ```
@@ -343,16 +360,23 @@ gs = fs = es = ds = ss = 0x10000
 cs = 0x10200
 ```
 
+`start_of_setup`로 점프한 이후에, 커널은 다음과 같은 것들을 수행해야합니다:
 After the jump to `start_of_setup`, the kernel needs to do the following:
+
+* 모든 세그먼트 레지스터 값들이 확실히 같게 할 것.
+* 올바른 스택을 구성할 것, 필요하다면.
+* [bss](https://en.wikipedia.org/wiki/.bss)를 구성할 것.
+*  [arch/x86/boot/main.c](https://github.com/torvalds/linux/blob/v4.16/arch/x86/boot/main.c)의 C코드로 점프할 것.
 
 * Make sure that all segment register values are equal
 * Set up a correct stack, if needed
 * Set up [bss](https://en.wikipedia.org/wiki/.bss)
 * Jump to the C code in [arch/x86/boot/main.c](https://github.com/torvalds/linux/blob/v4.16/arch/x86/boot/main.c)
 
+어떻게 구현되었나 한번 살펴봅시다.
 Let's look at the implementation.
 
-Aligning the Segment Registers 
+세그먼트 레지스터들 정렬 
 --------------------------------------------------------------------------------
 
 First of all, the kernel ensures that the `ds` and `es` segment registers point to the same address. Next, it clears the direction flag using the `cld` instruction:
