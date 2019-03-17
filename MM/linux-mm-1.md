@@ -110,7 +110,7 @@ struct memblock memblock __initdata_memblock = {
 };
 ```
 
-Here we can see initialization of the `memblock` structure which has the same name as structure - `memblock`. First of all note the `__initdata_memblock`. Definition of this macro looks like:
+여기 `memblock`구조체 이름과 같은 객체 `memblock`의 초기화를 볼 수 있다. 그 전에 `__initdata_memblock`에 대해서 먼저 보면, 이 매크로는 이렇게 정의되어 있다:
 
 ```C
 #ifdef CONFIG_ARCH_DISCARD_MEMBLOCK
@@ -122,9 +122,9 @@ Here we can see initialization of the `memblock` structure which has the same na
 #endif
 ```
 
-You can see that it depends on `CONFIG_ARCH_DISCARD_MEMBLOCK`. If this configuration option is enabled, memblock code will be put into the `.init` section and will be released after the kernel is booted up.
+매크로는 `CONFIG_ARCH_DISCARD_MEMBLOCK`에 의존하고 있다. 이 설정이 활성화되면, memblock 코드들은 `.init` 섹션에 위치하게 되고, 커널이 부팅이 끝나고 나면 해제됩니다. 
 
-Next we can see the initialization of the `memblock_type memory`, `memblock_type reserved` and `memblock_type physmem` fields of the `memblock` structure. Here we are interested only in the `memblock_type.regions` initialization process. Note that every `memblock_type` field is initialized by and array of `memblock_region`s:
+다음으로는 `memblock` 구조체의 변수들인 `memblock_type memory`, `memblock_type reserved` 그리고 `memblock_type physmem`의 초기화 과정을 볼 수 있습니다. 여기서 `memblock_type.regions`의 초기화 과정에만 관심이 있다. `memblock_type`의 모든 변수들은 `memblock_region`의 배열로 초기화를 한다. 
 
 ```C
 static struct memblock_region memblock_memory_init_regions[INIT_MEMBLOCK_REGIONS] __initdata_memblock;
@@ -134,23 +134,24 @@ static struct memblock_region memblock_physmem_init_regions[INIT_PHYSMEM_REGIONS
 #endif
 ```
 
-Every array contains 128 memory regions. We can see it in the `INIT_MEMBLOCK_REGIONS` macro definition:
+모든 배열들은 128개(`INIT_MEMBLOCK_REGIONS`)의 memblock_region을 갖습니다. 
 
 ```C
 #define INIT_MEMBLOCK_REGIONS   128
 ```
 
-Note that all arrays are also defined with the `__initdata_memblock` macro which we already saw in the `memblock` structure initialization (read above if you've forgotten).
+그리고 또한 모든 배열들은 `__initdata_memblock` 매크로와 함께 정의 되어있습니다.
+이 매크로는 위에서 `memblock` 초기화 과정에서 본 적이있는데 기억이 안나면 위를 한 번 다시 읽어보세요.
 
-The last two fields describe that `bottom_up` allocation is disabled and the limit of the current Memblock is:
+초기화 과정에서 마지막 두 개 변수를 보면, `bottom_up` 할당은 비활성화 되어있고, 현재 Memblock의 한계를 보면: 
 
 ```C
 #define MEMBLOCK_ALLOC_ANYWHERE (~(phys_addr_t)0)
 ```
 
-which is `0xffffffffffffffff`.
+이 값은 `0xffffffffffffffff` 이다.
 
-On this step the initialization of the `memblock` structure has been finished and we can have a look at the Memblock API.
+이로써 `memblock` 구조체 초기화 과정은 마무리하고, Memblock의 API에 대해서 살펴보도록 하겠습니다.
 
 Memblock API
 --------------------------------------------------------------------------------
