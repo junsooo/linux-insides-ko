@@ -37,11 +37,11 @@ linux-insides 한국어 번역
 
 번역 완료된 세션
 --------------
-시스템 콜 - [1](https://github.com/junsooo/linux-insides-ko/blob/master/SysCall/linux-syscall-1.md)
+[링크](https://github.com/junsooo/linux-insides-ko/issues?utf8=%E2%9C%93&q=+label%3Adone+)
 
 진행중인 세션
 --------------
-데이터 구조 - [1](https://github.com/junsooo/linux-insides-ko/blob/master/DataStructures/linux-datastructures-1.md)
+[링크](https://github.com/junsooo/linux-insides-ko/issues?utf8=%E2%9C%93&q=is%3Aopen+is%3Aissue+label%3AInprogress)
 
 원 저자
 ---------------
