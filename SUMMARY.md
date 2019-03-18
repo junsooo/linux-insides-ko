@@ -88,3 +88,4 @@
     * [IDT](KernelStructures/linux-kernelstructure-1.md)
 * [Useful links](LINKS.md)
 * [Contributors](contributors.md)
+* [Korean Contributors](korean-contributors.md)
