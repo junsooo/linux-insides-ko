@@ -13,10 +13,9 @@ ELF 오브젝트 파일은 다음과 같은 부분으로 구성된다:
 
 **ELF 헤더**
 
-ELF 헤더는 오브젝트 파일의 시작 부분에 위치한다. 주요 목적은 오브젝트 파일의 나머지 모든 부분을 찾는 것입니다. 파일 헤더는 다음과 같은 필드를 포함한다:
+ELF 헤더는 오브젝트 파일의 시작 부분에 위치한다. 주요 목적은 오브젝트 파일의 나머지 모든 부분을 찾는 것이다. 파일 헤더는 다음과 같은 필드를 포함한다:
 
-* ELF 신분증명(identification) - 파일을 ELF 오브젝트 파일로 식별하는데 도움이 되는 바이트 배열 과 일반 오브젝트 파일 특성에 대한 정보를 제공;
-* Object file type - identifies the object file type. This field can describe that ELF file is a relocatable object file, an executable file, etc...;
+* ELF 신분증명(identification) - 파일을 ELF 오브젝트 파일로 식별하는데 도움이 되는 바이트 배열과 일반 오브젝트 파일 특성에 대한 정보를 제공;
 * 오브젝트 파일 유형  - 오브젝트 파일의 유형을 식별함. 재배치 가능 오브젝트 파일, 실행 파일 등등으로 이 필드에 유형을 표기함.
 * 타겟 아키텍쳐;
 * 오브젝트 파일 포맷의 버전;
@@ -86,8 +85,6 @@ typedef struct elf64_shdr {
 
 **프로그램 헤더 테이블**
 
-All sections are grouped into segments in an executable or shared object file. Program header is an array of structures which describe every segment. It looks like:
-
 모든 섹션은 실행 가능 또는 공유 오브젝트 파일 내에 세그먼트로 그룹화된다. 프로그램 헤더는 모든 세그먼트를 기술하는 구조체의 배열이다. 다음과 같은 모양이다:
 ```C
 typedef struct elf64_phdr {
@@ -109,7 +106,6 @@ typedef struct elf64_phdr {
 vmlinux
 --------------------------------------------------------------------------------
 
-`vmlinux` is also a relocatable ELF object file . We can take a look at it with the `readelf` util. First of all let's look at the header:
 `vmlinux`도 재배치 가능 ELF 오브젝트 파일이다. `readelf` 유틸리티로 확인 가능하다. 먼저 그 헤더 부분을 확인해 보자: 
 
 ```
