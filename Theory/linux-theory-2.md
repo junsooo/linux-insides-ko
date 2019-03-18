@@ -1,11 +1,12 @@
 Executable and Linkable Format
 ================================================================================
 
-ELF (Executable and Linkable Format) is a standard file format for executable files, object code, shared libraries and core dumps. Linux and many UNIX-like operating systems use this format. Let's look at the structure of the ELF-64 Object File Format and some definitions in the linux kernel source code which related with it.
+ELF (Executable and Linkable Format)는 실행 파일, 오브젝트 파일, 공유 라이브러리와 코어 덤프를 위한 표준 파일 포맷이다. 리눅스와 많은 유닉스 운영체제가 이 포맷을 사용한다. 리눅스 커널 소스에서 ELF-64 오브젝트 파일 포맷과 일부 정의를 살펴보자.
 
-An ELF object file consists of the following parts:
+ELF 오브젝트 파일은 다음과 같은 부분으로 구성된다:
 
 * ELF header - describes the main characteristics of the object file: type, CPU architecture, the virtual address of the entry point, the size and offset of the remaining parts, etc...;
+* ELF 헤더 -
 * Program header table - lists the available segments and their attributes. Program header table need loaders for placing sections of the file as virtual memory segments;
 * Section header table - contains the description of the sections.
 
@@ -114,7 +115,7 @@ vmlinux
 ```
 $ readelf -h  vmlinux
 ELF Header:
-  Magic:   7f 45 4c 46 02 01 01 00 00 00 00 00 00 00 00 00 
+  Magic:   7f 45 4c 46 02 01 01 00 00 00 00 00 00 00 00 00
   Class:                             ELF64
   Data:                              2's complement, little endian
   Version:                           1 (current)
@@ -147,7 +148,7 @@ We can then look this address up in the `vmlinux` ELF object with:
 
 ```
 $ readelf -s vmlinux | grep ffffffff81000000
-     1: ffffffff81000000     0 SECTION LOCAL  DEFAULT    1 
+     1: ffffffff81000000     0 SECTION LOCAL  DEFAULT    1
  65099: ffffffff81000000     0 NOTYPE  GLOBAL DEFAULT    1 _text
  90766: ffffffff81000000     0 NOTYPE  GLOBAL DEFAULT    1 startup_64
 ```
@@ -205,9 +206,9 @@ Program Headers:
   Segment Sections...
    00     .text .notes __ex_table .rodata __bug_table .pci_fixup .builtin_fw
           .tracedata __ksymtab __ksymtab_gpl __kcrctab __kcrctab_gpl
-		  __ksymtab_strings __param __modver 
-   01     .data .vvar 
-   02     .data..percpu 
+		  __ksymtab_strings __param __modver
+   01     .data .vvar
+   02     .data..percpu
    03     .init.text .init.data .x86_cpu_dev.init .altinstructions
           .altinstr_replacement .iommu_table .apicdrivers .exit.text
 		  .smp_locks .data_nosave .bss .brk
