@@ -156,23 +156,23 @@ static struct memblock_region memblock_physmem_init_regions[INIT_PHYSMEM_REGIONS
 Memblock API
 --------------------------------------------------------------------------------
 
-Ok we have finished with the initialization of the `memblock` structure and now we can look at the Memblock API and its implementation. As I said above, the implementation of `memblock` is taking place fully in [mm/memblock.c](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/mm/memblock.c). To understand how `memblock` works and how it is implemented, let's look at its usage first. There are a couple of [places](http://lxr.free-electrons.com/ident?i=memblock) in the linux kernel where memblock is used. For example let's take `memblock_x86_fill` function from the [arch/x86/kernel/e820.c](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/arch/x86/kernel/e820.c#L1061). This function goes through the memory map provided by the [e820](http://en.wikipedia.org/wiki/E820) and adds memory regions reserved by the kernel to the `memblock` with the `memblock_add` function. Since we have met the `memblock_add` function first, let's start from it.
+`memblock` 구조체의 초기화를 살펴보았고, 지금부터는 Memblock의 API가 어떻게 구현되어있는지에 대해서 살펴보겠습니다. 위에서 언급한것 처럼, `memblock`의 구현은 [mm/memblock.c](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/mm/memblock.c) 에 되어있습니다. `memblock`이 어떻게 동작하는지 그리고 어떻게 구현되어있는지를 이해하기 위해서는 어떻게 사용되는지를 살펴보겠습니다. 커널에는 memblock이 [몇 차례](http://lxr.free-electrons.com/ident?i=memblock) 사용되고 있습니다. 예를 들어, [arch/x86/kernel/e820.c](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/arch/x86/kernel/e820.c#L1061)에 있는 `memblock_x86_fill` 함수가 있겠습니다. 이 함수는 [e820](http://en.wikipedia.org/wiki/E820)에서 제공하는 메모리 맵을 따르고 있고, 커널은 reserved에 해당하는 memory region들을 `memblock`에 `memblock_add` 함수를 이용하여 추가하고 있습니다. 우리가 `memblock_add`함수를 처음으로 만났으니, 이 함수부터 시작해보겠습니다.
 
-This function takes a physical base address and the size of the memory region as arguments and add them to the `memblock`. The `memblock_add` function does not do anything special in its body, but just calls the:
+이 함수는 물리 메모리의 시작 주소 그리고 사이즈를 함수인자로 받아 `memblock`에 추가합니다. `memblock_add` 함수는 자체적으로는 하는 것이 없고 아래 함수를 호출합니다:
 
 ```C
 memblock_add_range(&memblock.memory, base, size, MAX_NUMNODES, 0);
 ```
 
-function. We pass the memory block type - `memory`, the physical base address and the size of the memory region, the maximum number of nodes which is 1 if `CONFIG_NODES_SHIFT` is not set in the configuration file or `1 << CONFIG_NODES_SHIFT` if it is set, and the flags. The `memblock_add_range` function adds a new memory region to the memory block. It starts by checking the size of the given region and if it is zero it just returns. After this, `memblock_add_range` checks the existence of the memory regions in the `memblock` structure with the given `memblock_type`. If there are no memory regions, we just fill a new `memory_region` with the given values and return (we already saw the implementation of this in the [First touch of the linux kernel memory manager framework](https://0xax.gitbooks.io/linux-insides/content/Initialization/linux-initialization-3.html)). If `memblock_type` is not empty, we start to add a new memory region to the `memblock` with the given `memblock_type`.
+이 함수의 인자로 메모리 블락 타입을 `memory`로 전달하고 있습니다. 그리고 물리 메모리의 시작 주소와 사이즈, 그리고 노드 갯수의 최대인 1(`CONFIG_NODES_SHIFT`가 비활성화 되어있으면 1, 활성화 되어있다면 `1 << CONFIG_NODES_SHIFT`)을 마지막으로는 플레그를 전달하고 있습니다. `memblock_add_range` 함수는 새로운 메모리 영역을 메모리 블락에 추가해주는 함수입니다. 함수는 인자로 넘어온 사이즈를 체크(사이즈가 0인지 확인 후 0이라면 바로 리턴)하는 것부터 시작합니다. 그리고 `memblock_add_range`함수는 `memblock`구조체에 넘어온 `memblock_type`의 존재 여부를 체크합니다. 만약 존재하지 않는다면(비어있다면), 하나의 노드를 추가하고 바로 리턴해버립니다. (이미 이 부현부분은 [First touch of the linux kernel memory manager framework](https://0xax.gitbooks.io/linux-insides/content/Initialization/linux-initialization-3.html)에서 확인한 적이 있습니다.) 만약 `memblock_type`이 비어있지 않다면, 새로운 메모리 영역을 `memblock`에 주어진 `memblock_type`으로 추가합니다.
 
-First of all we get the end of the memory region with the:
+무엇보다도, 우리는 메모리의 마지막 주소를 아래의 방법으로 얻을 수 있습니다:
 
 ```C
 phys_addr_t end = base + memblock_cap_size(base, &size);
 ```
 
-`memblock_cap_size` adjusts `size` that `base + size` will not overflow. Its implementation is pretty easy:
+`memblock_cap_size` 는 `base + size`가 오버플로우가 발생하지 않도록 `size`를 잘 조절합니다. 구현은 생각보다 쉽습니다:
 
 ```C
 static inline phys_addr_t memblock_cap_size(phys_addr_t base, phys_addr_t *size)
@@ -181,14 +181,14 @@ static inline phys_addr_t memblock_cap_size(phys_addr_t base, phys_addr_t *size)
 }
 ```
 
-`memblock_cap_size` returns the new size which is the smallest value between the given size and `ULLONG_MAX - base`.
+`memblock_cap_size`함수는 주어진 사이즈와 `ULLONG_MAX - base` 중에 더 작은 값을 리턴합니다.
 
-After that we have the end address of the new memory region, `memblock_add_range` checks for overlap and merge conditions with memory regions that have been added before. Insertion of the new memory region to the `memblock` consists of two steps:
+새로운 메모리 영역의 마지막 주소를 계산해 낸 다음에, `memblock_add_range` 함수는 새로운 메모리 영역과 기존에 추가된 영역사이에 겹쳐지는 부분 그리고 합쳐지는 조건을 확인한다. `memblock`에 새로운 메모리 영역을 추가하는  것은 두 단계로 나누어 진다:
 
-* Adding of non-overlapping parts of the new memory area as separate regions;
-* Merging of all neighboring regions.
+* 겹쳐지는 영역이 없는 메모리에 대해서 새로운 메모리 영역으로 추가한다.
+* 인접한 메모리 영역에 대해서는 하나로 합친다.
 
-We are going through all the already stored memory regions and checking for overlap with the new region:
+우리는 이미 추가된 메모리 영역에 대해서 새로운 메모리 영역 사이에 겹쳐지는 부분이 있는 지 살펴볼 것이다:
 
 ```C
 	for (i = 0; i < type->cnt; i++) {
@@ -206,7 +206,7 @@ We are going through all the already stored memory regions and checking for over
 	}
 ```
 
-If the new memory region does not overlap with regions which are already stored in the `memblock`, insert this region into the memblock with and this is first step, we check if the new region can fit into the memory block and call `memblock_double_array` in another way:
+`memblock`에 이미 추가된 메모리 영역과 새로 더해 질 메모리 영역 사이에 겹쳐지는 영역이 없다면, 기존의 영역과는 다른 메모리 영역으로 추가해주는 것이 첫 번재 단계이다. 그리고 새로운 메모리 영역이 메모리 블락에 알맞은지 확인한다. 그리고 `memblock_double_array`함수를 다른 방법으로 호출한다:
 
 ```C
 while (type->cnt + nr_new > type->max)
@@ -216,7 +216,7 @@ while (type->cnt + nr_new > type->max)
 	goto repeat;
 ```
 
-`memblock_double_array` doubles the size of the given regions array. Then we set `insert` to `true` and go to the `repeat` label. In the second step, starting from the `repeat` label we go through the same loop and insert the current memory region into the memory block with the `memblock_insert_region` function:
+`memblock_double_array` 함수는 영역들의 배열의 크기를 두 배로 만들어줍니다. 그리고 `insert`변수를 `true` 로 설정해주고, `repeat` 라벨로 이동합니다. 두 번째 단계로는 `repeat` 라벨부터 시작해서 같은 반복문을 실행하고, 현재 메모리 영역을 `memblock_insert_region`함수로 메모리 블락에 삽입해줍니다:
 
 ```C
 	if (base < end) {
@@ -227,21 +227,22 @@ while (type->cnt + nr_new > type->max)
 	}
 ```
 
-Since we set `insert` to `true` in the first step, now `memblock_insert_region` will be called. `memblock_insert_region` has almost the same implementation that we saw when we inserted a new region to the empty `memblock_type` (see above). This function gets the last memory region:
+`insert`를 `true`로 첫 번재 단계에서 변경해주었기 때문에, `memblock_insert_region`함수는 호출될 것입니다. `memblock_insert_region`함수는 위에서 설명했던 비어 있는 `memblock_type`에 새로운 메모리 영역을 추가하는 것과 매우 유사하게 구현되어 있습니다. (위 코드들을 참조)
+이 함수는 마지막 메모리 영역을 얻어 냅니다:
 
 ```C
 struct memblock_region *rgn = &type->regions[idx];
 ```
 
-and copies the memory area with `memmove`:
+그리고 `memmove`함수로 메모리를 복사합니다:
 
 ```C
 memmove(rgn + 1, rgn, (type->cnt - idx) * sizeof(*rgn));
 ```
 
-After this fills `memblock_region` fields of the new memory region base, size, etc. and increases size of the `memblock_type`. In the end of the execution, `memblock_add_range` calls `memblock_merge_regions` which merges neighboring compatible regions in the second step.
+그 후에는 `memblock_region`함수로 새로운 메모리 영역의 시작주소, 크기 등을 체웁니다. 그리고 `memblock_type`의 크기를 증가시킵니다. 수행의 마지막에는 `memblock_add_range`함수는 두 번째 단계에 해당하는 근접한 메모리들을 합치는 `memblock_merge_regions`함수를 호출합니다.
 
-In the second case the new memory region can overlap already stored regions. For example we already have `region1` in the `memblock`:
+두 번째 단계에서 새로운 메모리 영역은 다른 기존의 영역과 겹쳐질 수 있습니다. 예를 들어 `memblock`에 `region1`영역이 존재하고 있었다고 한다면:
 
 ```
 0                    0x1000
@@ -253,8 +254,7 @@ In the second case the new memory region can overlap already stored regions. For
 |                       |
 +-----------------------+
 ```
-
-And now we want to add `region2` to the `memblock` with the following base address and size:
+`memblock`에 아래와 같은 `region2`를 추가하려한다고 해보겠습니다.
 
 ```
 0x100                 0x2000
@@ -266,14 +266,13 @@ And now we want to add `region2` to the `memblock` with the following base addre
 |                       |
 +-----------------------+
 ```
-
-In this case set the base address of the new memory region as the end address of the overlapped region with:
+이런 경우, 새로운 메모리 영역의 시작주소를 인접하는 영역의 끝 주소로 설정합니다:
 
 ```C
 base = min(rend, end);
 ```
 
-So it will be `0x1000` in our case. And insert it as we did it already in the second step with:
+그래서 우리의 경우 `0x1000`번지가 새로운 메모리 영역의 시작주소가 됩니다. 그리고 두 번째 단계에서 우리가 했던 것처럼 추가해줍니다:
 
 ```
 if (base < end) {

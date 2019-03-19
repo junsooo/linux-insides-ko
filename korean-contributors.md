@@ -5,4 +5,5 @@ Linux-insides-ko에 기여하신 분들의 명단
 * [mingrammer](https://github.com/mingrammer)
 * [namjae](https://github.com/namjae)
 * [Jeungwoo Yoo](https://github.com/casionwoo)
-* [Byounhoon Kim](https://github.com/shoebillk)
+* [Youngin Kim](https://github.com/youngjinkim0706)
+* [Byounghoon Kim](https://github.com/shoebillk)

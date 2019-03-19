@@ -57,22 +57,3 @@ linux-insides 한국어 번역
 -------------
 
 [BY-NC-SA Creative Commons](http://creativecommons.org/licenses/by-nc-sa/4.0/)
-
-
-# (linux-insides) 메일링 리스트
-
-현재 커널 소스 코드의 학습을 위한 구글 그룹 메일링 리스트를 운영중입니다. 아래는 사용법에 대한 설명입니다.
-
-#### 가입하기
-
-`kernelhacking+subscribe@googlegroups.com`으로 제목과 내용을 아무렇게나 작성해서 이메일을 보내주세요. 그러면 확인 메일을 하나 받을텐데, 다시 아무 내용이나 작성해서 답장해주세요. 그럼 가입이 완료됩니다.
-
-> 만약 구글 계정을 가지고 있으면, [아카이브 페이지](https://groups.google.com/forum/#!forum/kernelhacking)를 열어서 **그룹 가입하기** 버튼을 클릭하세요. 그러면 자동으로 가입이 될 것입니다.
-
-#### 메일링 리스트에 이메일 보내기
-
-`kernelhacking@googlegroups.com`에 이메일을 보내주세요. 기본 사용 방식은 mailman이 제공하는 다른 메일링 리스트들과 동일합니다.
-
-#### 아카이브
-
-https://groups.google.com/forum/#!forum/kernelhacking
