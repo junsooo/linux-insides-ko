@@ -106,7 +106,7 @@ typedef struct elf64_phdr {
 vmlinux
 --------------------------------------------------------------------------------
 
-`vmlinux`도 재배치 가능 ELF 오브젝트 파일입니다. `readelf` 유틸리티로 확인 가능합니다. 먼저 그 헤더 부분을 확인해 봅시다:
+`vmlinux`도 재배치 가능 ELF 오브젝트 파일입니다. `readelf` 유틸리티로 확인 가능합니다. 먼저 헤더 부분을 확인해 봅시다:
 
 ```
 $ readelf -h  vmlinux
@@ -167,13 +167,13 @@ $ readelf -s vmlinux | grep ffffffff81000000
 	}
 ```
 
-`__START_KERNEL`은 다음과 같이 정의되어 있고 :
+`__START_KERNEL`은 다음과 같이 정의되어 있고:
 
 ```
 #define __START_KERNEL		(__START_KERNEL_map + __PHYSICAL_START)
 ```
 
-위 문서로부터의 `__START_KERNEL_map` 값은 `ffffffff80000000`이고 `__PHYSICAL_START`는 `0x1000000`입니다. 그래서 `startup_64` 값은   `ffffffff81000000`입니다.
+위 문서로부터의 `__START_KERNEL_map` 값은 `ffffffff80000000`이고 `__PHYSICAL_START`는 `0x1000000`입니다. 그래서 `startup_64` 값은 `ffffffff81000000`입니다.
 
 그리고 마지막으로 다음과 같은 명령으로 `vmlinux`에서 프로그램 헤더를 확인할 수 있습니다:
 
