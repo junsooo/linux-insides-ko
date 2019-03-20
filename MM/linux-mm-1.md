@@ -282,7 +282,7 @@ if (base < end) {
 }
 ```
 
-In this case we insert `overlapping portion` (we insert only the higher portion, because the lower portion is already in the overlapped memory region), then the remaining portion and merge these portions with `memblock_merge_regions`. As I said above `memblock_merge_regions` function merges neighboring compatible regions. It goes through all memory regions from the given `memblock_type`, takes two neighboring memory regions - `type->regions[i]` and `type->regions[i + 1]` and checks that these regions have the same flags, belong to the same node and that the end address of the first regions is not equal to the base address of the second region:
+이 경우에 우리는 `overlapping portion`(아랫 부분의 메모리는 이미 겹쳐져 있기 때문에 윗 부분에 대해서만 삽입합니다)를 삽입합니다. 그 다음은 남은 부분을 추가하고, `memblock_merge_regions`함수로 두 메모리 영역을 합칩니다. 위에서 언급했듯이, `memblock_merge_regions`함수는 이웃한 같은 메모리 영역을 합칩니다. 제공된 `memblock_type`으로부터 모든 메모리 영역들을 하나 씩 확인하면서, 이웃한 메모리 영역들을 병합합니다. `type->regions[i]` 그리고 `type->regions[i + 1]` 그리고 이웃한 메모리 영역들의 플래그가 같은지 그리고 같은 노드(첫 번째 메모리 영역의 끝 주소와 두 번째 메모리 영역의 시작 주소가 같은지 여부)에 해당하는지 확인합니다:
 
 ```C
 while (i < type->cnt - 1) {
@@ -298,25 +298,25 @@ while (i < type->cnt - 1) {
 	}
 ```
 
-If none of these conditions are true, we update the size of the first region with the size of the next region:
+이 조건 중 하나라도 `true`가 아니면, 첫 번째 메모리 영역의 사이즈를 두 번째 메모리 영역의 사이즈로 업데이트한다:
 
 ```C
 this->size += next->size;
 ```
 
-As we update the size of the first memory region with the size of the next memory region, we move all memory regions which are after the (`next`) memory region one index backwards with the `memmove` function:
+첫 번재 메모리 영역의 사이즈를 다음 번 메모리 영역의 사이즈로 업데이트함에 따라서, 우리는 (`next`) 메모리 영역 뒤의 모든 메모리 영역을`memmove` 함수로 역순으로 하나의 인덱스로 이동시킵니다 :
 
 ```C
 memmove(next, next + 1, (type->cnt - (i + 2)) * sizeof(*next));
 ```
 
-The `memmove` here moves all regions which are located after the `next` region to the base address of the `next` region. In the end we just decrease the count of the memory regions which belong to the `memblock_type`:
+`memmove` 함수는`next` 영역 다음에 위치하는 모든 영역을 `next` 영역의 시작 주소로 이동시킵니다. 마지막으로`memblock_type`에 속한 메모리 영역의 수를 줄입니다.:
 
 ```C
 type->cnt--;
 ```
 
-After this we will get two memory regions merged into one:
+이 후에는 두 메모리 영역을 하나로 합칩니다.
 
 ```
 0                                             0x2000
