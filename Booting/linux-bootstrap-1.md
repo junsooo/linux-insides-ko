@@ -360,7 +360,7 @@ cs = 0x10200
 세그먼트 레지스터 정렬 
 --------------------------------------------------------------------------------
 
-앞서, 커널은 확실하게 
+앞서, 커널은 확실하게 `ds` 와 `es` 세그먼트 레지스터들이 같은 주소를 가리키게 만들어야 합니다. 다음으로는, `cld` 명령을 사용하여 디렉션 플래그를 클리어 해야합니다.
 First of all, the kernel ensures that the `ds` and `es` segment registers point to the same address. Next, it clears the direction flag using the `cld` instruction:
 
 ```assembly
