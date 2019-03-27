@@ -360,8 +360,7 @@ cs = 0x10200
 세그먼트 레지스터 정렬 
 --------------------------------------------------------------------------------
 
-앞서, 커널은 `ds` 와 `es` 세그먼트 레지스터가 같은 주소를 가리키게 만들어야 합니다. 다음으로, `cld` 명령을 사용하여 방향 플래그(Direction flag)를 클리어 해야합니다.
-First of all, the kernel ensures that the `ds` and `es` segment registers point to the same address. Next, it clears the direction flag using the `cld` instruction:
+모든것에 앞서서, 커널은 `ds` 와 `es` 세그먼트 레지스터가 같은 주소를 가리키게 만들어야 합니다. 다음으로는 `cld` 명령을 사용하여 방향 플래그(Direction flag)를 클리어 합니다.
 
 ```assembly
     movw    %ds, %ax
@@ -369,7 +368,7 @@ First of all, the kernel ensures that the `ds` and `es` segment registers point 
     cld
 ```
 
-앞서 작성했듯이, `grub`는 실행이 파일의 시작부분부터 이루어지지 않기 때문에, 커널 구성 코드는 `0x10000`에 로드하고, `CS`를 `0x10200`에 로드합니다. 또한 시작부분부터 시작하지 않는 대신 여기로 점프하여 시작합니다.
+앞서 작성했듯이, `grub`는 그 실행이 파일의 시작부터 이루어지지 않기 때문에, 커널 구성 코드를 `0x10000`에 로드하고, `CS`는 `0x10200`에 로드하여야 합니다. 또한 시작부터 실행하지 않는 대신, 여기로 점프하여 시작합니다:
 
 ```assembly
 _start:
@@ -377,7 +376,7 @@ _start:
     .byte start_of_setup-1f
 ```
 
-이 값은 [4d 5a](https://github.com/torvalds/linux/blob/v4.16/arch/x86/boot/header.S#L46). 에서 `512` 바이트 떨어진 곳에 있습니다. 또한 우리는 `CS`와 다른 모든 세그먼트 레지스터들을 0x10200에서 0x10000으로 정렬해야 합니다. 그리고 나서는, 스택을 설정해야 합니다:
+이 값은 [4d 5a](https://github.com/torvalds/linux/blob/v4.16/arch/x86/boot/header.S#L46)로 부터 `512` 바이트 떨어진 곳에 있습니다. 또한 우리는 `CS` 와 다른 모든 세그먼트 레지스터들을 0x10200에서 0x10000로 정렬 할 필요가 있습니다. 그 후에는 스택을 설정해야 합니다:
 
 ```assembly
     pushw   %ds
@@ -385,7 +384,7 @@ _start:
     lretw
 ```
 
-위는 `DS`의 값을 스택에 저장한 다음, [6](https://github.com/torvalds/linux/blob/v4.16/arch/x86/boot/header.S#L602)라벨의 주소를 지정한 후 `lretw` 명령을 실행합니다. `lretw` 명령이 호출되면, `6` 라벨의 주소를 [명령 포인터](https://en.wikipedia.org/wiki/Program_counter)레지스터에 로드하고, `cs`에 `ds`의 값을 로드합니다. 이후, `ds`와 `cs`는 같은 값을 가지게 됩니다.
+위 코드는 `DS`의 값을 스택에 저장한 다음, [6](https://github.com/torvalds/linux/blob/v4.16/arch/x86/boot/header.S#L602)라벨의 주소를 지정한 후 `lretw` 명령을 실행합니다. `lretw` 명령이 호출되면, `6` 라벨의 주소를 [명령 포인터](https://en.wikipedia.org/wiki/Program_counter)레지스터에 로드하고, `cs`에 `ds`의 값을 로드하게 됩니다. 이후, `ds`와 `cs`는 같은 값을 가지게 됩니다.
 
 스택 구성
 --------------------------------------------------------------------------------
