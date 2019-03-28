@@ -31,7 +31,7 @@
 
 6. `korean-contributors.md`에 본인의 이름을 꼭 넣어주세요.
 
-6. 번역에 대해 commit을 하고 push한 이후에, Github에서 풀 리퀘스트를 보내주세요.
+7. 번역에 대해 commit을 하고 push한 이후에, Github에서 풀 리퀘스트를 보내주세요.
 
 **중요**
 
