@@ -1,24 +1,24 @@
-Per-CPU variables
+CPU별 변수
 ================================================================================
 
-Per-CPU variables are one of the kernel features. You can understand the meaning of this feature by reading its name. We can create a variable and each processor core will have its own copy of this variable. In this part, we take a closer look at this feature and try to understand how it is implemented and how it works.
+CPU별 변수들은 커널 기능의 하나입니다. 이름을 읽으면 이 기능의 의미를 이해할 수 있을 것입니다. 우리는 변수를 만들 수 있고 각 프로세서 코어는 자체적으로 이 변수의 복사본을 가질 것입니다. 이 부분에서는 이 기능을 자세히 살펴보고 구현 방법 및 동작 방법을 이해하기 위해 노력할 것입니다.
 
-The kernel provides an API for creating per-cpu variables - the `DEFINE_PER_CPU` macro:
+커널은 CPU별 변수를 만드는 API를 제공합니다 - `DEFINE_PER_CPU` 메크로입니다:
 
 ```C
 #define DEFINE_PER_CPU(type, name) \
         DEFINE_PER_CPU_SECTION(type, name, "")
 ```
 
-This macro defined in the [include/linux/percpu-defs.h](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/include/linux/percpu-defs.h) as many other macros for work with per-cpu variables. Now we will see how this feature is implemented.
+이 메크로는 CPU별 변수와 함께 동작하는 다른 많은 매크로들과 마찬가지로 [include/linux/percpu-defs.h](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/include/linux/percpu-defs.h) 파일에 정의되어 있습니다. 
 
-Take a look at the `DEFINE_PER_CPU` definition. We see that it takes 2 parameters: `type` and `name`, so we can use it to create per-cpu variables, for example like this:
+`DEFINE_PER_CPU` 정의를 살펴보십시오. `type`과 `name`, 2개의 파라미터를 가짐을 볼 수 있습니다: CPU별 변수를 생성하기 위해 그 파라미터들을 사용할 수 있으며, 예를 들면 다음과 같습니다:
 
 ```C
 DEFINE_PER_CPU(int, per_cpu_n)
 ```
 
-We pass the type and the name of our variable. `DEFINE_PER_CPU` calls the `DEFINE_PER_CPU_SECTION` macro and passes the same two parameters and empty string to it. Let's look at the definition of the `DEFINE_PER_CPU_SECTION`:
+변수의 타입과 이름을 전달합니다. `DEFINE_PER_CPU`은 `DEFINE_PER_CPU_SECTION` 매크로를 호출하고 동일한 2개의 파라미터와 빈 문자열을 전달합니다. `DEFINE_PER_CPU_SECTION` 정의를 살펴보십시오:
 
 ```C
 #define DEFINE_PER_CPU_SECTION(type, name, sec)    \
@@ -32,19 +32,19 @@ We pass the type and the name of our variable. `DEFINE_PER_CPU` calls the `DEFIN
          PER_CPU_ATTRIBUTES
 ```
 
-where `section` is:
+여기서 `section`은:
 
 ```C
 #define PER_CPU_BASE_SECTION ".data..percpu"
 ```
 
-After all macros are expanded we will get a global per-cpu variable:
+모든 매크로가 확장된 후에 우리는 전역 CPU별 변수를 얻을 것입니다.
 
 ```C
 __attribute__((section(".data..percpu"))) int per_cpu_n
 ```
 
-It means that we will have a `per_cpu_n` variable in the `.data..percpu` section. We can find this section in the `vmlinux`:
+이는 `.data..percpu` 섹션에 `per_cpu_n` 변수가 있음을 의미합니다. 우리는 `vmlinux`에서 이 섹션을 찾을 수 있습니다:
 
 ```
 .data..percpu 00013a58  0000000000000000  0000000001a5c000  00e00000  2**12

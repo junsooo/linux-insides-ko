@@ -4,52 +4,53 @@ Interrupts and Interrupt Handling. Part 1.
 Introduction
 --------------------------------------------------------------------------------
 
-이번 챕터는 [linux insdes](https://0xax.gitbooks.io/linux-insides/content/)책의 새로운 챕터의 첫 부분입니다. 이전 챕터에서 많은 것을 보았습니다. 우리는 커널 초기화의 가장 첫 [과정](https://0xax.gitbooks.io/linux-insides/content/Initialization/linux-initializ    ation-1.html) of kernel initialization and finished with the [launch](https://0xax.gitbooks.io/linux-insides/content/Initialization/linux-initialization-10.html)으로 시작해서 첫 프로세스인 `init`의 [시작](https://0xax.gitbooks.io/linux-insides/content/Initialization/linux-initialization-10.html)으로 이전 챕터를 끝마쳤습니다. 네, 우리는 다양한 커널의 서브시스템에 관련된 몇몇의 초기화 과정들을 지켜봤습니다. 그러나 우리는 아직 이러한 서브시스템들을 심층적으로 보지 못했습니다. 이번 챕터에서, 우리는 다양한 커널 서브시스템들이 어떻게 작동하는지 이해할 것이고, 그것들이 어떻게 구현되어있는지 살펴볼 것 입니다. 챕터의 제목으로부터 이미 유추할 수 있듯이, 첫 서브시스템은 [Interrupt](http://en.wikipedia.org/wiki/Interrupt)입니다. 
+This is the first part of the new chapter of the [linux insides](https://0xax.gitbooks.io/linux-insides/content/) book. We have come a long way in the previous [chapter](https://0xax.gitbooks.io/linux-insides/content/Initialization/index.html) of this book. We started from the earliest [steps](https://0xax.gitbooks.io/linux-insides/content/Initialization/linux-initialization-1.html) of kernel initialization and finished with the [launch](https://0xax.gitbooks.io/linux-insides/content/Initialization/linux-initialization-10.html) of the first `init` process. Yes, we saw several initialization steps which are related to the various kernel subsystems. But we did not dig deep into the details of these subsystems. With this chapter, we will try to understand how the various kernel subsystems work and how they are implemented. As you can already understand from the chapter's title, the first subsystem will be [interrupts](http://en.wikipedia.org/wiki/Interrupt).
 
-Interrupt란 무엇인가?
+What is an Interrupt?
 --------------------------------------------------------------------------------
-우리는 이미 이 책의 여러 부분에서 `interrupt`라는 단어를 봐왔습니다. 우리는 심지어 interrupt handler들의 여러 예도 봤습니다. 이제 이번 챕터에서 우리는 다음과 같은 내용을 시작할 것입니다. 
-* `interrupts`란 무엇인가?
-* `interrupt handlers`란 무엇인가?
 
-그리고 나서 우리는 `interrupts`에 대해 더 깊게 파보고, 리눅스 커널에서 `interrupts`를 어떻게 다루는지 공부할 것입니다.
+We have already heard of the word `interrupt` in several parts of this book. We even saw a couple of examples of interrupt handlers. In the current chapter we will start from the theory i.e.,
 
-우리가 `interrupt`라는 단어를 처음 접했을 때 생기는 첫 질문은 `interrupt란 무엇일까?`라는 것입니다. Interrupt는 소프트웨어나 하드웨어로 인해 발생하는 CPU의 참여를 필요로 하는 `event`로 의할 수 있습니다. 예를 들면, 키보드의 버튼을 누르면, 우리는 무엇을 기대할까요? 운영체제와 컴퓨터는 키보드 버튼을 누른다음에 무엇을 해야할까요? 문제를 단순화시키기 위해서, 각 주변 장치들은 단 하나의 CPU로의 interrupt line을 가지고 있다고 가정해봅시다. 장치는 CPU로 interrupt 신호를 보내기 위해 interrupt line을 사용할 수 있습니다. 그러나 interrupts는 CPU에 직접적으로 전달되지 않습니다. 오래된 기계에서는, Programmable Interrupt Controller[PIC](http://en.wikipedia.org/wiki/Programmable_interrupt_controller)라는 여러대의 장치로부터 들어오는 여러개의 Interrupt 요청들을 순차적으로 처리하기 위한 별도의 칩이 있습니다. 요즘 기계에는 `APIC`라고 불리는 [Advanced Programmable Interrupt Controller](https://en.wikipedia.org/wiki/Advanced_Programmable_Interrupt_Controller)가 있습니다. `APIC`는 두개의 분리된 장치로 구성됩니다. 
+* What are `interrupts` ?
+* What are `interrupt handlers`?
+
+We will then continue to dig deeper into the details of `interrupts` and how the Linux kernel handles them.
+
+The first question that arises in our mind when we come across word `interrupt` is `What is an interrupt?` An interrupt is an `event` raised by software or hardware when it needs the CPU's attention. For example, we press a button on the keyboard and what do we expect next? What should the operating system and computer do after this? To simplify matters, assume that each peripheral device has an interrupt line to the CPU. A device can use it to signal an interrupt to the CPU. However, interrupts are not signaled directly to the CPU. In the old machines there was a [PIC](http://en.wikipedia.org/wiki/Programmable_Interrupt_Controller) which is a chip responsible for sequentially processing multiple interrupt requests from multiple devices. In the new machines there is an [Advanced Programmable Interrupt Controller](https://en.wikipedia.org/wiki/Advanced_Programmable_Interrupt_Controller) commonly known as - `APIC`. An `APIC` consists of two separate devices:
 
 * `Local APIC`
 * `I/O APIC`
 
-The first - `Local APIC`는 각 CPU 코어에 있습니다. local APIC는 CPU-특정적인(CPU-Specific) interrupt 설정을 담당합니다. Local APIC는 보통 APIC-timer, 열 센서(thermal sensor) 그리고 기기에 직접 연결되어있는 I/O 장치에서 발생하는 interrupt를 다룹니다. 
+The first - `Local APIC` is located on each CPU core. The local APIC is responsible for handling the CPU-specific interrupt configuration. The local APIC is usually used to manage interrupts from the APIC-timer, thermal sensor and any other such locally connected I/O devices.
 
-The Second - `I/O APIC`는 다중 프로세서 interrupt 관리를 제공합니다. I/O APIC는 CPU 코어들 사이의 외부 interrupt들을 분산시키기 위해 사용됩니다. Local과 I/O APIC들에 대한 자세한 내용은 이번 챕터에서 다룰것입니다. 당신이 이해할 수 있듯이, interrupt는 언제든지 발생할 수 있습니다. Interrupt가 발생하면, 운영체제는 발생한 interrupt를 즉시 처리해야합니다. 그런데 `interrupt를 처리한다`라는 것의 의미는 무엇일까요? Interrupt가 발생할 때, 운영체제는 반드시 다음과 같은 과정을 따라야합니다. 
+The second - `I/O APIC` provides multi-processor interrupt management. It is used to distribute external interrupts among the CPU cores. More about the local and I/O APICs will be covered later in this chapter. As you can understand, interrupts can occur at any time. When an interrupt occurs, the  operating system must handle it immediately. But what does it mean `to handle an interrupt`? When an interrupt occurs, the  operating system must ensure the following steps:
 
-* 커널은 반드시 현재 프로세스의 실행을 멈춰야합니다.(현재 작업을 선점한다)
-* 커널은 반드시 해당 Interrupt의 핸들러와 전송 컨트롤을 찾아야합니다.(Interrupt 핸들러를 실행한다)
-* Interrupt 핸들러가 실행을 완료한 후, Interrupt로 인해 멈춰진 프로세스(Interrupted Process)는 실행을 재개 할 수 있습니다. 
+* The kernel must pause execution of the current process; (preempt current task);
+* The kernel must search for the handler of the interrupt and transfer control (execute interrupt handler);
+* After the interrupt handler completes execution, the interrupted process can resume execution.
 
-물론, Interrupt들을 처리하는 과정에는 수많은 복잡한 사항들이 포함되어 있습니다. 그러나 위의 3 단계는 Interrupt 처리 과정의 기본적인 골격을 형성합니다. 
+Of course there are numerous intricacies involved in this procedure of handling interrupts. But the above 3 steps form the basic skeleton of the procedure.
 
-각 Interrupt 핸들러의 주소는 `Interrupt Descriptor Table` 또는 `IDT`라고 불리는 틀별한 장소에서 유지됩니다. 프로세서는 Interrupt나 Exception(예외)의 종류를 인식하기 위해 고유의 숫자를 사용합니다. 이 숫자를 `vector number`라고 부릅니다. Vector number는 `IDT`의 인덱스입니다. Vector number의 갯수는 `0` ~ `255`까지로 정해져있습니다. 리눅스 커널 소스코드에서 다음과 같이 vector number에 대한 범위 체크를 할 수 있습니다.   
+Addresses of each of the interrupt handlers are maintained in a special location referred to as the - `Interrupt Descriptor Table` or `IDT`. The processor uses a unique number for recognizing the type of interruption or exception. This number is called - `vector number`. A vector number is an index in the `IDT`. There is limited amount of the vector numbers and it can be from `0` to `255`. You can note the following range-check upon the vector number within the Linux kernel source-code:
 
 ```C
 BUG_ON((unsigned)n > 0xFF);
 ```
 
-Interrupt 셋업(예를 들면, [arch/x86/include/asm/desc.h](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/arch/x86/include/asm/desc.h)내의 `set_intr_gate`, `void set_system_intr_gate`)와 연관된 리눅스 커널 소스에서 위의 확인코드를 찾을 수 있습니다. `0`부터 `31`까지의 첫 32개의 vector number는 프로세서에 의해 예약되어 있고, 아키텍처에 맞춰 디자인 된 Exception들과 interrupt들을 처리하기 위해 사용됩니다. 리눅스 커널 초기화의 두번째 파트-[Early interrupt and exception handling](https://0xax.gitbooks.io/linux-insides/content/Initialization/linux-initialization-2.html)에서 이 vector number들을 설명하는 표를 확인 할 수 있습니다. `32`부터 `255`까지 vector number들은 사용자-정의 interrupts로 지정되어있고, 이들은 프로세서에 의해 예약되어있지 않습니다. 이러한 interrupt들은 일반적으로 외부 장치들이 프로세서에 interrupts를 보내는 것을 허용하기 위해 사용됩니다. 
+You can find this check within the Linux kernel source code related to interrupt setup (eg. The `set_intr_gate`, `void set_system_intr_gate` in [arch/x86/include/asm/desc.h](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/arch/x86/include/asm/desc.h)). The first 32 vector numbers from `0` to `31` are reserved by the processor and used for the processing of architecture-defined exceptions and interrupts. You can find the table with the description of these vector numbers in the second part of the Linux kernel initialization process - [Early interrupt and exception handling](https://0xax.gitbooks.io/linux-insides/content/Initialization/linux-initialization-2.html). Vector numbers from `32` to `255` are designated as user-defined interrupts and are not reserved by the processor. These interrupts are generally assigned to external I/O devices to enable those devices to send interrupts to the processor.
 
-자, 이제 Interrupts의 종류에 대해 이야기해봅시다. 넓은 의미에서 보자면, Interrupt는 2개의 주요 클래스로 나눠집니다:
+Now let's talk about the types of interrupts. Broadly speaking, we can split interrupts into 2 major classes:
 
-* 외부 또는 하드웨어 생성 Interrupt
-* 소프트웨어 생성 Interrupt
+* External or hardware generated interrupts
+* Software-generated interrupts
 
-The first - 외부 Interrupt들은 `Local APIC` 또는 `Local APIC`와 연결된 프로세서의 핀들을 통해 유입됩니다. The second - 소프트웨어 생성 Interrupt들은 프로세서 스스로의 예외 조건들에 의해서 생성됩니다. (때로는 특별한 아키텍처-특화 명령어에 의해서도 생성됩니다). 예외 조건의 일반적인 사례는 `division by zero`입니다. 또 다른 예는 `syscall` 명령어를 통한 프르그램 종료입니다.
+The first - external interrupts are received through the `Local APIC` or pins on the processor which are connected to the `Local APIC`. The second - software-generated interrupts are caused by an exceptional condition in the processor itself (sometimes using special architecture-specific instructions). A common example for an exceptional condition is `division by zero`. Another example is exiting a program with the `syscall` instruction.
 
-처음에 언급했던 것처럼, Interrupt는 코드와 CPU가 제어할 수 없는 이유로 언제든지 발생할 수 있습니다. 반면, 예외는 프로그램의 실행과 `동기화`되어있고, 또한 3개의 카테고리로 분류할 수 있습니다:
+As mentioned earlier, an interrupt can occur at any time for a reason which the code and CPU have no control over. On the other hand, exceptions are `synchronous` with program execution and can be classified into 3 categories:
 
 * `Faults`
 * `Traps`
 * `Aborts`
-
 
 A `fault` is an exception reported before the execution of a "faulty" instruction (which can then be corrected). If corrected, it allows the interrupted program to be resume.
 
