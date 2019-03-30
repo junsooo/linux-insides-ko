@@ -494,7 +494,7 @@ main으로 점프
 이게 전부입니다 - 우리는 BSS와 스택을 가지고 있으니, 이제 C 함수인 `main()`으로 점프할 수 있습니다:
 
 ```assembly
-    calll main
+    call main
 ```
 
 `main()` 함수는 [arch/x86/boot/main.c](https://github.com/torvalds/linux/blob/v4.16/arch/x86/boot/main.c)에 위치하고 있습니다. 이게 무엇을 하는지에 대해서는 다음 파트에서 읽을 수 있습니다.
@@ -503,7 +503,7 @@ main으로 점프
 --------------------------------------------------------------------------------
 여기가 Linux kernel insides 첫 번째 장의 끝입니다. 만약 질문이나 의견이 있으시다면, 저를 트위터에서 핑해주시거나 [0xAX](https://twitter.com/0xAX), [이메일](anotherworldofworld@gmail.com)을 보내주시거나, 또는 그냥 [이슈](https://github.com/0xAX/linux-internals/issues/new)를 생성해주세요. 다음 장에서는, 리눅스 커널 구성에서 실행되는 첫 C 코드, `memset`, `memcpy`, `earlyprintk`와 같은 메모리 관리 루틴들, 초기 콘솔 구현과 초기화 등등을 살펴 볼 것입니다.
 
-**영어는 제 모국어가 아닙니다, 그리고 여타 불편하셨던 점에 대해서 정말로 사과드립니다. 만약 실수들을 찾아내셨다면 부디 [linux-insides 원본](https://github.com/0xAX/linux-internals) 또는 [linux-insides 한국 번역](https://github.com/junsooo/linux-insides-ko)로 PR을 보내주세요.**
+**영어는 제 모국어가 아닙니다, 그리고 여타 불편하셨던 점에 대해서 정말로 사과드립니다. 만약 실수들을 찾아내셨다면 부디 [linux-insides 원본](https://github.com/0xAX/linux-internals)으로, 번역에 대해서는 [linux-insides 한국 번역](https://github.com/junsooo/linux-insides-ko)로 PR을 보내주세요.**
 
 링크들 
 --------------------------------------------------------------------------------
