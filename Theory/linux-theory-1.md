@@ -1,38 +1,47 @@
-Paging
+이징 
 ================================================================================
 
-Introduction
+서론 
 --------------------------------------------------------------------------------
-
+시리즈의 15번째 [파트](https://0xax.gitbooks.io/linux-insides/content/Booting/linux-bootstrap-5.html)인 `리눅스 커널 부팅 과정`에서, 우리는 커널이 초기 단계에서 무엇을 하는지를 배울 수 있었습니다. 우리가 커널이 어떻게 첫 번째 초기화 과정을 수행하는지 보기 전에, 다음 단계에 `initrd` 마운팅, lockdep 초기화 등등 다른 많은 것들을 초기화 할 것입니다.
 In the fifth [part](https://0xax.gitbooks.io/linux-insides/content/Booting/linux-bootstrap-5.html) of the series `Linux kernel booting process` we learned about what the kernel does in its earliest stage. In the next step the kernel will initialize different things like `initrd` mounting, lockdep initialization, and many many other things, before we can see how the kernel runs the first init process.
 
+그래요, 다른 여러가지 것들, 하지만 매우 많이 그리고 많은 작업들을 **메모리**와 다시 한번 더 할거에요.
 Yeah, there will be many different things, but many many and once again many work with **memory**.
 
+제 생각으로는, 메모리 관리는 리눅스 커널과 보통의 시스템 프로그래밍에서 가장 복잡한 부분 중 하나라고 생각합니다. 이것이 우리가 커널 초기화 작업을 계속하기 전에 페이징에 대해서 알아야 하는 이유입니다.
 In my view, memory management is one of the most complex parts of the Linux kernel and in system programming in general. This is why we need to get acquainted with paging, before we proceed with the kernel initialization stuff.
 
+`페이징`은 선형 메모리 주소를 물리 주소로 번역해주는 메커니즘입니다. 만약 이 책의 이전 파트를 읽어보셨다면, 아마도 리얼모드 세그먼테이션에서는 물리 주소가 세그먼트 레지스터를 4만큼 쉬프트하고 오프셋을 더하는 방식으로 계산된다는 것을 기억하고 계실겁니다. 그리고 우리는 보호모드에서의 세그먼테이션에서 디스크립터 테이블, 디스크립터로 부터의 기준주소 및 오프셋을 물리주소를 계산하기 위해 사용하는 것 또한 살펴 보았었습니다. 이제 우리는 64비트 모드에서의 페이징에 대해서 살펴볼 것입니다.
 `Paging` is a mechanism that translates a linear memory address to a physical address. If you have read the previous parts of this book, you may remember that we saw segmentation in real mode when physical addresses are calculated by shifting a segment register by four and adding an offset. We also saw segmentation in protected mode, where we used the descriptor tables and base addresses from descriptors with offsets to calculate the physical addresses. Now we will see paging in 64-bit mode.
 
-As the Intel manual says:
+인텔 매뉴얼이 말하길:
 
-> Paging provides a mechanism for implementing a conventional demand-paged, virtual-memory system where sections of a program’s execution environment are mapped into physical memory as needed.
+> 페이징은 프로그램 실행 환경의 섹션이 필요에 따라 물리적 메모리에 맵핑되는 기존의 요청 페이징, 가상 메모리 시스템을 구현하기 위한 메커니즘을 제공합니다. 
 
+그래서... 이 글에서 저는 페이징 뒤에 가려진 이론에 대해서 설명할 것입니다. 물론 `x86_64` 버전의 리눅스 커널과 밀접하게 연관되어 있습니다, 하지만 그렇게 자세하게까지는 가지 않을 것입니다 (적어도 이 포스트에서는요).
 So... In this post I will try to explain the theory behind paging. Of course it will be closely related to the `x86_64` version of the Linux kernel, but we will not go into too much details (at least in this post).
 
-Enabling paging
+페이징 활성화 
 --------------------------------------------------------------------------------
+페이징에서는 세 가지의 모드가 있습니다:
 
-There are three paging modes:
+* 32비트 페이징;
+* PAE 페이징;
+* IA-32e 페이징.
 
-* 32-bit paging;
-* PAE paging;
-* IA-32e paging.
-
+여기서는 마지막 모드에 대해서만 설명할 겁니다. `IA-32e 페이징` 페이징 모드를 활성화 하기 위해서는 다음과 같은 것들을 해야합니다:
 We will only explain the last mode here. To enable the `IA-32e paging` paging mode we need to do following things:
+
+* `CR0.PG` 비트 설정;
+* `CR4.PAE` 비트 설정;
+* `IA32_EFER.LME` 비트 설정.
 
 * set the `CR0.PG` bit;
 * set the `CR4.PAE` bit;
 * set the `IA32_EFER.LME` bit.
 
+우리는 이미 이 비트들이 [arch/x86/boot/compressed/head_64.S](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/arch/x86/boot/compressed/head_64.S)에서 설정되는 것을 봤습니다:
 We already saw where those bits were set in [arch/x86/boot/compressed/head_64.S](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/arch/x86/boot/compressed/head_64.S):
 
 ```assembly
@@ -40,7 +49,7 @@ movl	$(X86_CR0_PG | X86_CR0_PE), %eax
 movl	%eax, %cr0
 ```
 
-and
+그리고
 
 ```assembly
 movl	$MSR_EFER, %ecx
@@ -49,9 +58,10 @@ btsl	$_EFER_LME, %eax
 wrmsr
 ```
 
-Paging structures
+페이징 구조들
 --------------------------------------------------------------------------------
-
+페이징은 선형 주소 공간을 일정한 크기의 페이지들로 쪼갭니다. 페이지는 물리 주소 또는 외부 저장소에 맵핑될 수 있습니다. 이 일정한 크기는 `x86_64` 리눅스 커널에서는 `4096` 바이트 입니다. 선형 주소에서 물리 주소로의 변환을 수행하기 위해서는 특별한 구조가 사용됩니다. 모든 구조체는 `4096` 바이트이며 `512`개의 엔트리들을 포함하고 있습니다 (이 내용은 오직 `PAE`와 `IA32_EFER.LME` 모드에서만 해당됩니다)
+페이징 구조는 계층적이며, `x86_64` 아키텍쳐의 리눅스 커널은 4단계 페이징 기법을 사용합니다. CPU는 선형 주소의 일부를 낮은 단계의 물리 주소 영역(`페이지 프레임`) 또는 이 영역의 물리 주소(`페이지 오프셋`)에 있는 다른 페이징 구조의 엔트리를 식별하기 위해 사용합니다. 최상위 페이징 구조의 주소는 `cr3` 레지스터에 위치됩니다. 우리는 이것을 이미 [arch/x86/boot/compressed/head_64.S](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/arch/x86/boot/compressed/head_64.S) 에서 봤습니다:
 Paging divides the linear address space into fixed-size pages. Pages can be mapped into the physical address space or external storage. This fixed size is `4096` bytes for the `x86_64` Linux kernel. To perform the translation from linear address to physical address, special structures are used. Every structure is `4096` bytes and contains `512` entries (this only for `PAE` and `IA32_EFER.LME` modes). Paging structures are hierarchical and the Linux kernel uses 4 level of paging in the `x86_64` architecture. The CPU uses a part of linear addresses to identify the entry in another paging structure which is at the lower level, physical memory region (`page frame`) or physical address in this region (`page offset`). The address of the top level paging structure located in the `cr3` register. We have already seen this in [arch/x86/boot/compressed/head_64.S](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/arch/x86/boot/compressed/head_64.S):
 
 ```assembly
@@ -59,6 +69,7 @@ leal	pgtable(%ebx), %eax
 movl	%eax, %cr3
 ```
 
+페이지 테이블 구조를 만들고 최상위 구조의 주소를 `cr3` 레지스터에 넣었습니다. `cr3` 는 최상위 구조의 주소를 저장하기 위해 사용됩니다, 리눅스 커널에서는 `PML4` 또는 `페이지 전역 디렉터리` 라고 불립니다. `cr3`는 64비트 레지스터이며 다음과 같은 구조를 따릅니다:
 We build the page table structures and put the address of the top-level structure in the `cr3` register. Here `cr3` is used to store the address of the top-level structure, the `PML4` or `Page Global Directory` as it is called in the Linux kernel. `cr3` is 64-bit register and has the following structure:
 
 ```
