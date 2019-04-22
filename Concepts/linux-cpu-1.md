@@ -51,25 +51,25 @@ __attribute__((section(".data..percpu"))) int per_cpu_n
               CONTENTS, ALLOC, LOAD, DATA
 ```
 
-Ok, now we know that when we use the `DEFINE_PER_CPU` macro, a per-cpu variable in the `.data..percpu` section will be created. When the kernel initializes it calls the `setup_per_cpu_areas` function which loads the `.data..percpu` section multiple times, one section per CPU.
+OK, 이제 우리는 `DEFINE_PER_CPU` 매크로를 사용할 때, `.data..percpu` 섹션에 있는 CPU별 변수가 생성될 것을 알고 있습니다. 커널이 초기화할 때, `.data..percpu` 섹션을 여러번 로드하는 `setup_per_cpu_areas` 함수를 호출합니다. 이 함수는 CPU당 하나의 섹션입니다.
 
-Let's look at the per-CPU areas initialization process. It starts in the [init/main.c](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/init/main.c) from the call of the `setup_per_cpu_areas` function which is defined in the [arch/x86/kernel/setup_percpu.c](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/arch/x86/kernel/setup_percpu.c).
+CPU별 영역 초기화 과정을 살펴보겠습니다. 그것은 [init/main.c](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/init/main.c)소스에서, [arch/x86/kernel/setup_percpu.c](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/arch/x86/kernel/setup_percpu.c)에 정의된 `setup_per_cpu_areas` 함수 호출로 시작됩니다.
 
 ```C
 pr_info("NR_CPUS:%d nr_cpumask_bits:%d nr_cpu_ids:%d nr_node_ids:%d\n",
         NR_CPUS, nr_cpumask_bits, nr_cpu_ids, nr_node_ids);
 ```
 
-The `setup_per_cpu_areas` starts from the output information about the maximum number of CPUs set during kernel configuration with the `CONFIG_NR_CPUS` configuration option, actual number of CPUs, `nr_cpumask_bits` is the same that `NR_CPUS` bit for the new `cpumask` operators and number of `NUMA` nodes.
+`setup_per_cpu_areas`는 커널 구성 중에 설정한 최대 CPU 수에 대한 출력 정보에서 시작됩니다. 설정 항목은 `CONFIG_NR_CPUS` 구성 옵션, 실제 CPU 수, `nr_cpumask_bits`(`NR_CPUS` 비트와 동일. `NR_CPUS` 비트는 새로운 `cpumask` 연산자와 `NUMA` 노드 수를 위한 것) 등입니다.
 
-We can see this output in the dmesg:
+우리는 dmesg 안에서 이러한 출력을 볼 수 있습니다:
 
 ```
 $ dmesg | grep percpu
 [    0.000000] setup_percpu: NR_CPUS:8 nr_cpumask_bits:8 nr_cpu_ids:8 nr_node_ids:1
 ```
 
-In the next step we check the `percpu` first chunk allocator. All percpu areas are allocated in chunks. The first chunk is used for the static percpu variables. The Linux kernel has `percpu_alloc` command line parameters which provides the type of the first chunk allocator. We can read about it in the kernel documentation:
+다음 단계에서 우리는 `percpu` 첫번째 청크 할당자(chunk allocator)를 검사합니다. 모든 percpu 영역은 청크 안에 할당됩니다. 첫번째 청크는 static한 percpu 변수를 위해 사용됩니다. 리눅스 커널은 첫번째 청크 할당자의 타입을 제공하는 `percpu_alloc` 명령줄 파라미터를 가집니다. 우리는 커널 문서에서 이것에 대해 읽을 수 있습니다:
 
 ```
 percpu_alloc=	Select which percpu first chunk allocator to use.
@@ -80,21 +80,21 @@ percpu_alloc=	Select which percpu first chunk allocator to use.
 		and performance comparison.
 ```
 
-The [mm/percpu.c](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/mm/percpu.c) contains the handler of this command line option:
+[mm/percpu.c](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/mm/percpu.c)소스는 이 명령줄 옵션의 핸들러를 포함합니다:
 
 ```C
 early_param("percpu_alloc", percpu_alloc_setup);
 ```
 
-Where the `percpu_alloc_setup` function sets the `pcpu_chosen_fc` variable depends on the `percpu_alloc` parameter value. By default the first chunk allocator is `auto`:
+`pcpu_chosen_fc` 변수를 설정하는 `percpu_alloc_setup` 함수는 `percpu_alloc` 파라미터 값에 의존합니다. 첫번째 청크 할당자는 기본적으로 `auto` 입니다.
 
 ```C
 enum pcpu_fc pcpu_chosen_fc __initdata = PCPU_FC_AUTO;
 ```
 
-If the `percpu_alloc` parameter is not given to the kernel command line, the `embed` allocator will be used which embeds the first percpu chunk into bootmem with the [memblock](https://0xax.gitbooks.io/linux-insides/content/MM/linux-mm-1.html). The last allocator is the first chunk `page` allocator which maps the first chunk with `PAGE_SIZE` pages.
+만약 `percpu_alloc` 파라미터가 커널 명령줄에 주어지지 않는다면, `embed` 할당자가 [memblock](https://0xax.gitbooks.io/linux-insides/content/MM/linux-mm-1.html)와 함께 bootmem에 첫번째 percpu 청크를 끼워넣는 데에 사용될 것입니다. 마지막 할당자는, 첫번째 청크를 `PAGE_SIZE` 페이지에 매핑하는 첫번째 청크 `page` 할당자입니다.
 
-As I wrote above, first of all we make a check of the first chunk allocator type in the `setup_per_cpu_areas`. We check that first chunk allocator is not page:
+제가 위에 쓴데로, 우선 우리는 `setup_per_cpu_areas` 안에 있는 첫번째 청크 할당자 타입을 확인합니다. 첫번째 청크 할당자가 페이지가 아닌지 확인합니다:
 
 ```C
 if (pcpu_chosen_fc != PCPU_FC_PAGE) {
@@ -104,7 +104,7 @@ if (pcpu_chosen_fc != PCPU_FC_PAGE) {
 }
 ```
 
-If it is not `PCPU_FC_PAGE`, we will use the `embed` allocator and allocate space for the first chunk with the `pcpu_embed_first_chunk` function:
+만약 `PCPU_FC_PAGE`가 아니라면, 우리는 `embed` 할당자를 사용하고 `pcpu_embed_first_chunk` 함수와 함께 첫번째 청크를 위한 공간을 할당할 것입니다.
 
 ```C
 rc = pcpu_embed_first_chunk(PERCPU_FIRST_CHUNK_RESERVE,
@@ -113,16 +113,16 @@ rc = pcpu_embed_first_chunk(PERCPU_FIRST_CHUNK_RESERVE,
 					    pcpu_fc_alloc, pcpu_fc_free);
 ```
 
-As shown above, the `pcpu_embed_first_chunk` function embeds the first percpu chunk into bootmem then we pass a couple of parameters to the `pcup_embed_first_chunk`. They are as follows:
+위에서 보았듯, `pcpu_embed_first_chunk` 함수는 첫번째 CPU별 청크를 bootmem에 내장시키고 `pcup_embed_first_chunk`에 몇개의 파라미터를 전달합니다. 파라미터는 다음과 같습니다:
 
-* `PERCPU_FIRST_CHUNK_RESERVE` - the size of the reserved space for the static `percpu` variables;
-* `dyn_size` - minimum free size for dynamic allocation in bytes;
-* `atom_size` - all allocations are whole multiples of this and aligned to this parameter;
-* `pcpu_cpu_distance` - callback to determine distance between cpus;
-* `pcpu_fc_alloc` - function to allocate `percpu` page;
-* `pcpu_fc_free` - function to release `percpu` page.
+* `PERCPU_FIRST_CHUNK_RESERVE` - static `percpu` 변수를 위한 예약공간의 크기(사이즈);
+* `dyn_size` - 동적 할당을 위한 최소의 여유 사이즈(바이트);
+* `atom_size` - 모든 할당은 이것의 배수이며, 이 파라미터와 결합된다;
+* `pcpu_cpu_distance` - cpu 사이에서 거리를 결정하는 콜백;
+* `pcpu_fc_alloc` - `percpu` 페이지를 할당하는 함수;
+* `pcpu_fc_free` - `percpu` 페이지를 해제하는 함수.
 
-We calculate all of these parameters before the call of the `pcpu_embed_first_chunk`:
+우리는 모든 파라미터를 `pcpu_embed_first_chunk` 호출 전에 계산합니다:
 
 ```C
 const size_t dyn_size = PERCPU_MODULE_RESERVE + PERCPU_DYNAMIC_RESERVE - PERCPU_FIRST_CHUNK_RESERVE;
@@ -134,15 +134,17 @@ size_t atom_size;
 #endif
 ```
 
-If the first chunk allocator is `PCPU_FC_PAGE`, we will use the `pcpu_page_first_chunk` instead of the `pcpu_embed_first_chunk`. After that `percpu` areas up, we setup `percpu` offset and its segment for every CPU with the `setup_percpu_segment` function (only for `x86` systems) and move some early data from the arrays to the `percpu` variables (`x86_cpu_to_apicid`, `irq_stack_ptr` and etc...). After the kernel finishes the initialization process, we will have loaded N `.data..percpu` sections, where N is the number of CPUs, and the section used by the bootstrap processor will contain an uninitialized variable created with the `DEFINE_PER_CPU` macro.
+만약 첫번째 청크 할당자가 `PCPU_FC_PAGE`라면, 우리는 `pcpu_embed_first_chunk` 대신에 `pcpu_page_first_chunk`를 사용할 것입니다. 그 `percpu` 영역이 할당된 이후, 우리는 `percpu` 오프셋과 그 세그먼트를 설정합니다.
+이것은 `setup_percpu_segment` 함수를 가진 모든 CPU에 대한 것 입니다. 그리고 모든 데이터를 배열에서 `percpu` 변수(`x86_cpu_to_apicid`, `irq_stack_ptr` 등)로 옮깁니다.
+커널이 초기화 과정을 끝낸 후, 우리는 N `.data..percpu` 섹션을 로드했을 것이며, N은 CPU의 수이고 부트스트랩 프로세서가 사용하는 섹션은 `DEFINE_PER_CPU` 매크로와 함께 생성된 초기화되지 않은 변수를 포함할 것입니다.
 
-The kernel provides an API for per-cpu variables manipulating:
+커널은 cpu별 변수를 조작할 수 있는 API를 제공합니다:
 
 * get_cpu_var(var)
 * put_cpu_var(var)
 
 
-Let's look at the `get_cpu_var` implementation:
+`get_cpu_var` 구현을 살펴봅시다:
 
 ```C
 #define get_cpu_var(var)     \
@@ -152,7 +154,7 @@ Let's look at the `get_cpu_var` implementation:
 }))
 ```
 
-The Linux kernel is preemptible and accessing a per-cpu variable requires us to know which processor the kernel is running on. So, current code must not be preempted and moved to the another CPU while accessing a per-cpu variable. That's why, first of all we can see a call of the `preempt_disable` function then a call of the `this_cpu_ptr` macro, which looks like:
+리눅스 커널은 선점가능하며 cpu별 변수에 접근하려면 커널이 실행중인 프로세서를 알 필요가 있습니다. 그래서, 현재의 코드는 cpu별 변수를 접근하는 동안에 선점되어 다른 CPU로 옮겨지면 안됩니다. 그래서, 우선 `preempt_disable`를 호출한 다음 `this_cpu_ptr` 매크로를 호출하는 것을 볼 수 있습니다:
 
 ```C
 #define this_cpu_ptr(ptr) raw_cpu_ptr(ptr)
