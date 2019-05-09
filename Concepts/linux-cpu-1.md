@@ -166,7 +166,8 @@ and
 #define raw_cpu_ptr(ptr)        per_cpu_ptr(ptr, 0)
 ```
 
-where `per_cpu_ptr` returns a pointer to the per-cpu variable for the given cpu (second parameter). After we've created a per-cpu variable and made modifications to it, we must call the `put_cpu_var` macro which enables preemption with a call of `preempt_enable` function. So the typical usage of a per-cpu variable is as follows:
+여기서 `per_cpu_ptr`는 주어진 cpu(2번째 변수)에 대한 CPU별 변수의 포인터를 리턴합니다. 우리가 cpu별 변수를 만들고 수정한 후에, `preempt_enable` 함수를 호출하여 선점하도록 하는 `put_cpu_var` 매크로를 호출해야 합니다. 그래서 CPU별 변수의 일반적인 사용법은 다음과 같습니다:
+
 
 ```C
 get_cpu_var(var);
@@ -176,7 +177,7 @@ get_cpu_var(var);
 put_cpu_var(var);
 ```
 
-Let's look at the `per_cpu_ptr` macro:
+`per_cpu_ptr` 매크로를 보십시오:
 
 ```C
 #define per_cpu_ptr(ptr, cpu)                             \
@@ -186,7 +187,7 @@ Let's look at the `per_cpu_ptr` macro:
 })
 ```
 
-As I wrote above, this macro returns a per-cpu variable for the given cpu. First of all it calls `__verify_pcpu_ptr`:
+위에 쓴 대로, 이 매크로는 주어진 CPU에 대한 CPU별 변수를 리턴합니다. 우선 그것은 `__verify_pcpu_ptr`를 호출합니다:
 
 ```C
 #define __verify_pcpu_ptr(ptr)
@@ -196,37 +197,38 @@ do {
 } while (0)
 ```
 
-which makes the given `ptr` type of `const void __percpu *`,
+`const void __percpu *`의 주어진 `ptr` 타입을 만듭니다.
 
-After this we can see the call of the `SHIFT_PERCPU_PTR` macro with two parameters. As first parameter we pass our ptr and for second parameter we pass the cpu number to the `per_cpu_offset` macro:
+이후 2개의 파라미터를 가지는 `SHIFT_PERCPU_PTR` 매크로의 호출을 볼 수 있습니다. 첫번째 파라미터로 우리의 ptr를 전달하고 두번째 파라미터로 cpu 번호를 `per_cpu_offset` 매크로에 전달합니다:
+
 
 ```C
 #define per_cpu_offset(x) (__per_cpu_offset[x])
 ```
 
-which expands to getting the `x` element from the `__per_cpu_offset` array:
+이것은 `__per_cpu_offset` 배열로부터 `x`  요소를 얻는 것으로 확장됩니다:
 
 
 ```C
 extern unsigned long __per_cpu_offset[NR_CPUS];
 ```
 
-where `NR_CPUS` is the number of CPUs. The `__per_cpu_offset` array is filled with the distances between cpu-variable copies. For example all per-cpu data is `X` bytes in size, so if we access `__per_cpu_offset[Y]`, `X*Y` will be accessed. Let's look at the `SHIFT_PERCPU_PTR` implementation:
+`NR_CPUS`는 CPU들의 수입니다. `__per_cpu_offset` 배열은 CPU 변수 복사본 사이의 거리로 채워집니다. 예를 들면 모든 CPU별 데이터는 `X` 바이트이기 때문에 `__per_cpu_offset [Y]`에 접근하면`X * Y`에 액세스됩니다. `SHIFT_PERCPU_PTR` 구현을 살펴보십시오:
 
 ```C
 #define SHIFT_PERCPU_PTR(__p, __offset)                                 \
          RELOC_HIDE((typeof(*(__p)) __kernel __force *)(__p), (__offset))
 ```
 
-`RELOC_HIDE` just returns offset `(typeof(ptr)) (__ptr + (off))` and it will return a pointer to the variable.
+`RELOC_HIDE`는 단지 `(typeof(ptr)) (__ptr + (off))` 오프셋을 리턴하고, 그것은 변수에 대한 포인터를 리턴할 것입니다.
 
-That's all! Of course it is not the full API, but a general overview. It can be hard to start with, but to understand per-cpu variables you mainly need to understand the  [include/linux/percpu-defs.h](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/include/linux/percpu-defs.h) magic.
+이것이 전부입니다! 물론 전체 API는 아니지만, 일반적인 개요입니다. 시작하기는 어려울 지 모르지만, CPU별 변수를 이해하기 위해서 당신은 주로 [include/linux/percpu-defs.h](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/include/linux/percpu-defs.h) 마법을 이해할 필요가 있습니다.
 
-Let's again look at the algorithm of getting a pointer to a per-cpu variable:
+CPU별 변수의 포인터를 얻는 알고리즘을 다시 살펴보겠습니다:
 
-* The kernel creates multiple `.data..percpu` sections (one per-cpu) during initialization process;
-* All variables created with the `DEFINE_PER_CPU` macro will be relocated to the first section or for CPU0;
-* `__per_cpu_offset` array filled with the distance (`BOOT_PERCPU_OFFSET`) between `.data..percpu` sections;
-* When the `per_cpu_ptr` is called, for example for getting a pointer on a certain per-cpu variable for the third CPU, the `__per_cpu_offset` array will be accessed, where every index points to the required CPU.
+* 초기화 과정에서 커널은 여러 개의 `.data..percpu` 섹션(CPU당 하나)을 생성합니다;
+* `DEFINE_PER_CPU` 매크로와 함께 생성된 모든 변수들은 첫번째 섹션이나 CPU0을 위해 재할당될 것입니다;
+* `__per_cpu_offset` 배열은 `.data..percpu` 섹션들 사이의 거리(`BOOT_PERCPU_OFFSET`)로 채워집니다;
+* `per_cpu_ptr`가 호출될 때, 예를 들어 세번째 CPU를 위한 특정 CPU별 변수에 대한 포인터를 얻는 경우,  `__per_cpu_offset` 배열이 액세스 될 것입니다. offset 배열은 모든 인덱스가 필요로 하는 CPU를 가리킵니다.
 
-That's all.
+이것이 전부입니다.
