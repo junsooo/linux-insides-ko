@@ -1,23 +1,23 @@
-Synchronization primitives in the Linux kernel. Part 2.
+리눅스 커널의 동기화 기본기능. Part 2.
 ================================================================================
 
 Queued Spinlocks
 --------------------------------------------------------------------------------
 
-This is the second part of the [chapter](https://0xax.gitbooks.io/linux-insides/content/SyncPrim/index.html) which describes synchronization primitives in the Linux kernel and in the first [part](https://0xax.gitbooks.io/linux-insides/content/SyncPrim/linux-sync-1.html) of this chapter we met the first - [spinlock](https://en.wikipedia.org/wiki/Spinlock). We will continue to learn this synchronization primitive in this part. If you have read the previous part, you may remember that besides normal spinlocks, the Linux kernel provides special type of `spinlocks` - `queued spinlocks`. In this part we will try to understand what this concept represents.
+이 부분은 리눅스 커널의 동기화 기본기능을 설명하는 [챕터](https://0xax.gitbooks.io/linux-insides/content/SyncPrim/index.html) 의 두번째 부분입니다, 이 챕터의 첫번째 [부분](https://0xax.gitbooks.io/linux-insides/content/SyncPrim/linux-sync-1.html) 에서는 그 첫번째 기본 기능 ([spinlock](https://en.wikipedia.org/wiki/Spinlock) 을 소개했죠. 이 부분에서는 이 동기화 기본기능에 대해 계속 배워보겠습니다. 앞 부분을 읽어보셨다면, 일반적인 spinlock과 달리, 리눅스 커널은 특별한 종류의 `spinlock` - `queued spinlock` 을 제공한다고 한 것을 기억할 겁니다. 이 부분에서는 이 컨셉이 무엇을 나타내는지 이해해 보겠습니다.
 
-We saw [API](https://en.wikipedia.org/wiki/Application_programming_interface) of `spinlock` in the previous [part](https://0xax.gitbooks.io/linux-insides/content/SyncPrim/linux-sync-1.html):
+앞 [부분](https://0xax.gitbooks.io/linux-insides/content/SyncPrim/linux-sync-1.html) 에서는 `spinlock` 의 [API](https://en.wikipedia.org/wiki/Application_programming_interface) 를 살펴봤습니다:
 
-* `spin_lock_init` - produces initialization of the given `spinlock`;
-* `spin_lock` - acquires given `spinlock`;
-* `spin_lock_bh` - disables software [interrupts](https://en.wikipedia.org/wiki/Interrupt) and acquire given `spinlock`.
-* `spin_lock_irqsave` and `spin_lock_irq` - disable interrupts on local processor and preserve/not preserve previous interrupt state in the `flags`;
-* `spin_unlock` - releases given `spinlock`;
-* `spin_unlock_bh` - releases given `spinlock` and enables software interrupts;
-* `spin_is_locked` - returns the state of the given `spinlock`;
-* and etc.
+* `spin_lock_init` - 특정 `spinlock` 의 초기화를 제공;
+* `spin_lock` - 특정 `spinlock` 을 획득;
+* `spin_lock_bh` - 소프트웨어 [인터럽트](https://en.wikipedia.org/wiki/Interrupt) 를 비활성화 시키고 특정 `spinlock` 을 획득.
+* `spin_lock_irqsave` 와 `spin_lock_irq` - 현재 프로세서에서의 인터럽트를 비활성화 시키고 `flags` 에 기존의 인터럽트 상태를 저장/비저장;
+* `spin_unlock` - 특정 `spinlock` 을 해제;
+* `spin_unlock_bh` - 특정 `spinlock` 을 해제하고 소프트웨어 인터럽트를 활성화;
+* `spin_is_locked` - 특정 `spinlock` 의 상태를 리턴;
+* 기타 등등.
 
-And we know that all of these macro which are defined in the [include/linux/spinlock.h](https://github.com/torvalds/linux/blob/master/include/linux/spinlock.h) header file will be expanded to the call of the functions with `arch_*` prefix from the [include/asm-generic/qspinlock.h](https://github.com/torvalds/linux/blob/master/include/asm-generic/qspinlock.h):
+또한 우리는 [include/linux/spinlock.h](https://github.com/torvalds/linux/blob/master/include/linux/spinlock.h) 헤더파일에 정의된 이 매크로들이 [include/asm-generic/qspinlock.h](https://github.com/torvalds/linux/blob/master/include/asm-generic/qspinlock.h) 에 있는 `arch_*` 프리픽스를 갖는 함수들의 호출로 확장된다는 걸 알고 있습니다:
 
 ```C
 #define arch_spin_is_locked(l)          queued_spin_is_locked(l)
@@ -28,7 +28,7 @@ And we know that all of these macro which are defined in the [include/linux/spin
 #define arch_spin_unlock(l)             queued_spin_unlock(l)
 ```
 
-Before we consider how queued spinlocks and their [API](https://en.wikipedia.org/wiki/Application_programming_interface) are implemented, we will take a look on theoretical part at first.
+Queued spinlock 과 그 [API](https://en.wikipedia.org/wiki/Application_programming_interface) 가 어떻게 구현되어 있는지 알아보기 전에, 이론적 부분을 먼저 들여다 보겠습니다.
 
 Introduction to queued spinlocks
 -------------------------------------------------------------------------------
