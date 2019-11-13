@@ -1,23 +1,23 @@
-Kernel initialization. Part 1.
+커널 초기화. Part 1.
 ================================================================================
 
-First steps in the kernel code
+커널 코드의 첫 단계
 --------------------------------------------------------------------------------
 
-The previous [post](https://0xax.gitbooks.io/linux-insides/content/Booting/linux-bootstrap-6.html) was a last part of the Linux kernel [booting process](https://0xax.gitbooks.io/linux-insides/content/Booting/index.html) chapter and now we are starting to dive into initialization process of the Linux kernel. After the image of the Linux kernel is decompressed and placed in a correct place in memory, it starts to work. All previous parts describe the work of the Linux kernel setup code which does preparation before the first bytes of the Linux kernel code will be executed. From now we are in the kernel and all parts of this chapter will be devoted to the initialization process of the kernel before it will launch process with [pid](https://en.wikipedia.org/wiki/Process_identifier) `1`. There are many things to do before the kernel will start first `init` process. Hope we will see all of the preparations before kernel will start in this big chapter. We will start from the kernel entry point, which is located in the [arch/x86/kernel/head_64.S](https://github.com/torvalds/linux/blob/master/arch/x86/kernel/head_64.S) and will move further and further. We will see first preparations like early page tables initialization, switch to a new descriptor in kernel space and many many more, before we will see the `start_kernel` function from the [init/main.c](https://github.com/torvalds/linux/blob/master/init/main.c) will be called.
+이전 [포스트](https://0xax.gitbooks.io/linux-insides/content/Booting/linux-bootstrap-6.html)는 Linux 커널 [부팅 프로세스](https : // 0xax.gitbooks.io/linux-insides/content/Booting/index.html)챕터의 마지막 부분이었습니다. 그리고 이제 Linux 커널의 초기화 과정을 시작합니다. Linux 커널 이미지가 압축 해제되고 메모리의 올바른 위치에 배치되면 작동하기 시작합니다. 이전의 모든 부분에서는 Linux 커널 코드의 첫 바이트가 실행되기 전에 준비하는 Linux 커널 설정 코드의 작업에 대해 설명합니다. 이제 우리는 커널에 있으며 이 장에서는 [pid](https://en.wikipedia.org/wiki/Process_identifier) `1`로 프로세스를 시작하기 전에 커널의 초기화 과정에 집중 할 것입니다. 커널이 `init`프로세스를 시작하기 전에 해야 할 일이 많이 있습니다. 이 큰 장에서 커널이 시작되기 전에 모든 준비 과정을 보게되기를 바랍니다. [arch/x86/kernel/head_64.S](https://github.com/torvalds/linux/blob/master/arch/x86/kernel/head_64.S)에 있는 커널 진입 점에서 시작하겠습니다. [init/main.c](https://github.com/torvalds/linux/blob/master/init/main.c)에서 `start_kernel` 함수를 호출 되는 것을 보기 전에 초기 페이지 테이블 초기화, 커널 공간에서 새 디스크립터로 전환하는 등과 같은 첫 번째 준비를 살펴볼 것입니다.
 
-In the last [part](https://0xax.gitbooks.io/linux-insides/content/Booting/linux-bootstrap-6.html) of the previous [chapter](https://0xax.gitbooks.io/linux-insides/content/Booting/index.html) we stopped at the jmp instruction from the [arch/x86/boot/compressed/head_64.S](https://github.com/torvalds/linux/blob/master/arch/x86/boot/compressed/head_64.S) assembly source code file:
+이전 [챕터](https://0xax.gitbooks.io/linux-insides/content/Booting/index.html)의 마지막 [부분](https://0xax.gitbooks.io/linux-insides/content/Booting/linux-bootstrap-6.html) [arch/x86/boot/compressed/head_64.S](https://github.com/torvalds/linux/blob/master/arch/x86/boot/compressed/head_64.S) 어셈블리 소스 코드 파일의 점프 명령에서 멈췄습니다:
 
 ```assembly
 jmp	*%rax
 ```
 
-At this moment the `rax` register contains address of the Linux kernel entry point which was obtained as a result of the call of the `decompress_kernel` function from the [arch/x86/boot/compressed/misc.c](https://github.com/torvalds/linux/blob/master/arch/x86/boot/compressed/misc.c) source code file. So, our last instruction in the kernel setup code is a jump on the kernel entry point. We already know where the entry point of the Linux kernel is defined, so we are able to start to learn what Linux kernel does after the start.
+현재 `rax` 레지스터에는 [arch/x86/boot/compressed/misc.c](https://github.com/torvalds/linux/blob/master/arch/x86/boot/compressed/misc.c) 소스 코드 파일에서 `decompress_kernel` 함수를 호출 한 결과 얻은 Linux 커널 진입 점의 주소가 포함되어 있습니다. 커널 설정 코드의 마지막 명령은 커널 진입 점을 뛰어 넘는 것입니다. 우리는 이미 Linux 커널의 진입 점이 정의되어 있다는 것을 알고 있으므로 Linux 커널이 무엇을하는지 배울 수 있습니다.
 
-First steps in the kernel
+커널의 첫 단계
 --------------------------------------------------------------------------------
 
-Okay, we got the address of the decompressed kernel image from the `decompress_kernel` function into `rax` register and just jumped there. As we already know the entry point of the decompressed kernel image starts in the [arch/x86/kernel/head_64.S](https://github.com/torvalds/linux/blob/master/arch/x86/kernel/head_64.S) assembly source code file and at the beginning of it, we can see following definitions:
+압축 해제 된 커널 이미지의 주소를 `decompress_kernel` 함수에서 `rax`레지스터로 가져 와서 바로 점프 하였습니다. 우리가 이미 알고 있듯이 압축 해제 된 커널 이미지의 시작점은 [arch/x86/kernel/head_64.S](https://github.com/torvalds/linux/blob/master/arch/x86/kernel/head_64.S)어셈블리 소스 코드 파일에서 시작하고 그 시작 부분에서 다음 정의를 볼 수 있습니다:
 
 ```assembly
     .text
@@ -30,13 +30,13 @@ startup_64:
 	...
 ```
 
-We can see definition of the `startup_64` routine that is defined in the `__HEAD` section, which is just a macro which expands to the definition of executable `.head.text` section:
+실행 가능한 `.head.text`섹션의 정의로 확장되는 매크로 인 `__HEAD`섹션에 정의 된 `startup_64`루틴의 정의를 볼 수 있습니다:
 
 ```C
 #define __HEAD		.section	".head.text","ax"
 ```
 
-We can see definition of this section in the [arch/x86/kernel/vmlinux.lds.S](https://github.com/torvalds/linux/blob/master/arch/x86/kernel/vmlinux.lds.S) linker script:
+이 섹션의 정의를 [arch/x86/kernel/vmlinux.lds.S](https://github.com/torvalds/linux/blob/master/arch/x86/kernel/vmlinux.lds.S) 링커 스크립트에서 볼 수 있다:
 
 ```
 .text : AT(ADDR(.text) - LOAD_OFFSET) {
@@ -47,13 +47,13 @@ We can see definition of this section in the [arch/x86/kernel/vmlinux.lds.S](htt
 } :text = 0x9090
 ```
 
-Besides the definition of the `.text` section, we can understand default virtual and physical addresses from the linker script. Note that address of the `_text` is location counter which is defined as:
+`.text`섹션의 정의 외에도 링커 스크립트에서 기본 가상 주소와 물리적 주소를 이해할 수 있습니다. `_text`의 주소는 다음과 같이 정의되는 위치 카운터입니다:
 
 ```
 . = __START_KERNEL;
 ```
 
-for [x86_64](https://en.wikipedia.org/wiki/X86-64). The definition of the `__START_KERNEL` macro is located in the [arch/x86/include/asm/page_types.h](https://github.com/torvalds/linux/blob/master/arch/x86/include/asm/page_types.h) header file and represented by the sum of the base virtual address of the kernel mapping and physical start:
+[x86_64](https://en.wikipedia.org/wiki/X86-64) 위해. `__START_KERNEL`매크로의 정의는 [arch/x86/include/asm/page_types.h](https://github.com/torvalds/linux/blob/master/arch/x86/include/asm/page_types.h)헤더 파일에 있고 커널 매핑의 기본 가상 주소와 물리적 시작의 합으로 표시됩니다:
 
 ```C
 #define __START_KERNEL	(__START_KERNEL_map + __PHYSICAL_START)
@@ -61,12 +61,12 @@ for [x86_64](https://en.wikipedia.org/wiki/X86-64). The definition of the `__STA
 #define __PHYSICAL_START  ALIGN(CONFIG_PHYSICAL_START, CONFIG_PHYSICAL_ALIGN)
 ```
 
-Or in other words:
+혹은 다른 표현으로:
 
-* Base physical address of the Linux kernel - `0x1000000`;
-* Base virtual address of the Linux kernel - `0xffffffff81000000`.
+* 리눅스 커널의 기본 물리 주소 - `0x1000000`;
+* 리눅스 커널의 기본 가상 주소 - `0xffffffff81000000`.
 
-After we sanitized CPU configuration, we call `__startup_64` function which is defined in [arch/x86/kernel/head64.c](https://github.com/torvalds/linux/blob/master/arch/x86/kernel/head64.c):
+CPU구성을 삭제한 후, [arch/x86/kernel/head64.c](https://github.com/torvalds/linux/blob/master/arch/x86/kernel/head64.c)에 정의된 `__startup_64`함수를 호출한다:
 
 ```assembly
 	leaq	_text(%rip), %rdi
@@ -95,22 +95,22 @@ unsigned log __head __startup_64(unsigned long physaddr,
 }
 ```
 
-Since [kASLR](https://en.wikipedia.org/wiki/Address_space_layout_randomization#Linux) is enabled, the address `startup_64` routine was loaded may be different from the address compiled to run at, so we need to calculate the delta with the following code:
+[kASLR](https://en.wikipedia.org/wiki/Address_space_layout_randomization#Linux)을 사용하도록 설정되었으므로 로드 된 'startup_64'루틴 주소가 컴파일 된 주소와 다를 수 있으므로 델타를 계산해야합니다. 다음 코드:
 
 ```C
 	load_delta = physaddr - (unsigned long)(_text - __START_KERNEL_map);
 ```
 
-As a result, `load_delta` contains the delta between the address compiled to run at and the address actually loaded.
+결과적으로, `load_delta`는 컴파일 된 주소와 실제로 로드 된 주소 사이의 델타를 포함합니다.
 
-After we got the delta, we check if `_text` address is correctly aligned for `2` megabytes. We will do it with the following code:
+델타를 얻은 후 `_text` 주소가 `2` 메가 바이트에 올바르게 정렬되어 있는지 확인합니다. 다음 코드를 사용하여 수행합니다:
 
 ```C
 	if (load_delta & ~PMD_PAGE_MASK)
 		for (;;);
 ```
 
-If `_text` address is not aligned for `2` megabytes, we enter infinite loop. The `PMD_PAGE_MASK` indicates the mask for `Page middle directory` (read [Paging](https://0xax.gitbooks.io/linux-insides/content/Theory/linux-theory-1.html) about it) and is defined as:
+`_text` 주소가 `2` 메가 바이트로 정렬되지 않으면 무한 루프가 됩니다. `PMD_PAGE_MASK`는 `Page middle directory`에 대한 마스크를 나타냅니다([Paging](https://0xax.gitbooks.io/linux-insides/content/Theory/linux-theory-1.html) 참조) 그리고 다음과 같이 정의됩니다:
 
 ```C
 #define PMD_PAGE_MASK           (~(PMD_PAGE_SIZE-1))
@@ -123,21 +123,21 @@ where `PMD_PAGE_SIZE` macro is defined as:
 #define PMD_SHIFT		21
 ```
 
-As we can easily calculate, `PMD_PAGE_SIZE` is `2` megabytes.
+쉽게 계산할 수있는 `PMD_PAGE_SIZE`는 `2`MB입니다.
 
-If [SME](https://en.wikipedia.org/wiki/Zen_%28microarchitecture%29#Enhanced_security_and_virtualization_support) is supported and enabled, we activate it and include the SME encryption mask in `load_delta`:
+[SME](https://en.wikipedia.org/wiki/Zen_%28microarchitecture%29#Enhanced_security_and_virtualization_support)가 지원되고 허용 된 경우 이를 활성화하고 `load_delta`에 SME 암호화 마스크를 포함시킵니다:
 
 ```C
 	sme_enable(bp);
 	load_delta += sme_get_me_mask();
 ```
 
-Okay, we did some early checks and now we can move on.
+자, 우리는 몇 가지 체크를 하였고 계속 진행할 수 있습니다.
 
-Fix base addresses of page tables
+페이지 테이블의 기본 주소 수정
 --------------------------------------------------------------------------------
 
-In the next step we fixup the physical addresses in the page table:
+다음 단계에서는 페이지 테이블의 실제 주소를 수정합니다:
 
 ```C
 	pgd = fixup_pointer(&early_top_pgt, physaddr);
@@ -145,7 +145,7 @@ In the next step we fixup the physical addresses in the page table:
 	pmd = fixup_pointer(level2_fixmap_pgt, physaddr);
 ```
 
-So, let's look at the definition of `fixup_pointer` function which returns physical address of the passed argument:
+전달 된 인자의 물리적 주소를 반환하는 `fixup_pointer`함수의 정의를 봅시다:
 
 ```C
 static void __head *fixup_pointer(void *ptr, unsigned long physaddr)
@@ -154,7 +154,7 @@ static void __head *fixup_pointer(void *ptr, unsigned long physaddr)
 }
 ```
 
-Next we'll focus on `early_top_pgt` and the other page table symbols which we saw above. Let's try to understand what these symbols mean. First of all let's look at their definition:
+다음으로 우리는 `early_top_pgt`와 위에서 본 다른 페이지 테이블 심볼에 초점을 맞출 것입니다. 이 기호들이 무엇을 의미하는지 이해하려고 노력합시다. 우선 그들의 정의를 봅시다:
 
 ```assembly
 NEXT_PAGE(early_top_pgt)
@@ -179,9 +179,9 @@ NEXT_PAGE(level1_fixmap_pgt)
 	.fill	512,8,0
 ```
 
-Looks hard, but it isn't. First of all let's look at the `early_top_pgt`. It starts with the `4096` bytes of zeros (or `8192` bytes if `CONFIG_PAGE_TABLE_ISOLATION` is enabled), it means that we don't use the first `512` entries. And after this we can see `level3_kernel_pgt` entry. At the start of its definition, we can see that it is filled with the `4080` bytes of zeros (`L3_START_KERNEL` equals `510`). Subsequently, it stores two entries which map kernel space. Note that we subtract `__START_KERNEL_map` from `level2_kernel_pgt` and `level2_fixmap_pgt`. As we know `__START_KERNEL_map` is a base virtual address of the kernel text, so if we subtract `__START_KERNEL_map`, we will get physical addresses of the `level2_kernel_pgt` and `level2_fixmap_pgt`.
+ 어려워 보이지만 그렇지 않습니다. 우선 `early_top_pgt`를 봅시다. `4096`바이트의 0으로 (`CONFIG_PAGE_TABLE_ISOLATION`이 활성화 된 경우 `8192`바이트로) 시작합니다. 이는 첫 번째 `512`항목을 사용하지 않음을 의미합니다. 그리고 나서 `level3_kernel_pgt`항목을 볼 수 있습니다. 정의의 시작 부분에서 `4080`바이트의 0으로 채워져 있음을 알 수 있습니다(`L3_START_KERNEL`은 `510`). 이어서 커널 공간을 매핑하는 두 개의 항목을 저장합니다. `level2_kernel_pgt` 과 `level2_fixmap_pgt`에서 `__START_KERNEL_map`을 뺍니다. 우리가 알고있는 것처럼 `__START_KERNEL_map`은 커널 텍스트의 기본 가상 주소이므로 `__START_KERNEL_map`을 빼면 `level2_kernel_pgt` 과 `level2_fixmap_pgt`의 물리적 주소를 얻게됩니다.
 
-Next let's look at `_KERNPG_TABLE_NOENC` and `_PAGE_TABLE_NOENC`, these are just page entry access rights:
+다음으로 `_KERNPG_TABLE_NOENC`와 `_PAGE_TABLE_NOENC`를 봅시다. 이들은 페이지 항목 액세스 권한입니다:
 
 ```C
 #define _KERNPG_TABLE_NOENC   (_PAGE_PRESENT | _PAGE_RW | _PAGE_ACCESSED | \
@@ -190,19 +190,19 @@ Next let's look at `_KERNPG_TABLE_NOENC` and `_PAGE_TABLE_NOENC`, these are just
 			       _PAGE_ACCESSED | _PAGE_DIRTY)
 ```
 
-The `level2_kernel_pgt` is page table entry which contains pointer to the page middle directory which maps kernel space. It calls the `PDMS` macro which creates `512` megabytes from the `__START_KERNEL_map` for kernel `.text` (after these `512` megabytes will be module memory space).
+`level2_kernel_pgt`는 커널 공간을 매핑하는 페이지 중간 디렉토리에 대한 포인터를 포함하는 페이지 테이블 항목입니다. 커널 `.text`에 대한 `__START_KERNEL_map`에서 `512` 메가 바이트를 생성하는 PDMS 매크로를 호출합니다.  (이 `512`메가 바이트는 모듈 메모리 공간이됩니다)
 
-The `level2_fixmap_pgt` is a virtual addresses which can refer to any physical addresses even under kernel space. They are represented by the `4048` bytes of zeros, the `level1_fixmap_pgt` entry, `8` megabytes reserved for [vsyscalls](https://lwn.net/Articles/446528/) mapping and `2` megabytes of hole.
+`level2_fixmap_pgt`는 커널 공간에서도 물리적 주소를 참조 할 수있는 가상 주소입니다. 그것들은 `4048` 바이트의 0, `level1_fixmap_pgt` 엔트리, [vsyscalls](https://lwn.net/Articles/446528/)매핑을 위해 예약 된 `8`메가 바이트와 `2` 메가 바이트의 홀로 표시됩니다.
 
-You can read more about it in the [Paging](https://0xax.gitbooks.io/linux-insides/content/Theory/linux-theory-1.html) part.
+자세한 내용은 [Paging](https://0xax.gitbooks.io/linux-insides/content/Theory/linux-theory-1.html)부분에서 읽을 수 있습니다.
 
-Now, after we saw the definitions of these symbols, let's get back to the code. Next we initialize last entry of `pgd` with `level3_kernel_pgt`:
+이제이 심볼의 정의를 확인한 후 코드로 돌아가 보겠습니다. 다음으로 `level3_kernel_pgt`로 `pgd`의 마지막 엔트리를 초기화합니다:
 
 ```C
 	pgd[pgd_index(__START_KERNEL_map)] = level3_kernel_pgt - __START_KERNEL_map + _PAGE_TABLE_NOENC;
 ```
 
-All of `p*d` addresses may be wrong if the `startup_64` is not equal to default `0x1000000` address. Remember that the `load_delta` contains delta between the address of the `startup_64` symbol which was got during kernel [linking](https://en.wikipedia.org/wiki/Linker_%28computing%29) and the actual address. So we add the delta to the certain entries of the `p*d`.
+`startup_64`가 기본 `0x1000000` 주소와 같지 않으면 모든 p * d 주소가 잘못되었을 수 있습니다. `load_delta`는 커널 [링킹](https://en.wikipedia.org/wiki/Linker_%28computing%29) 동안 얻은 `startup_64`심볼의 주소와 실제 주소 사이의 델타를 포함합니다. 따라서 `p * d`의 특정 항목에 델타를 추가합니다.
 
 ```C
 	pgd[pgd_index(__START_KERNEL_map)] += load_delta;
@@ -211,7 +211,7 @@ All of `p*d` addresses may be wrong if the `startup_64` is not equal to default 
 	pmd[506] += load_delta;
 ```
 
-After all of this we will have:
+이 모든 후에 다음 결과를 얻게 됩니다:
 
 ```
 early_top_pgt[511] -> level3_kernel_pgt[0]
@@ -221,12 +221,12 @@ level2_kernel_pgt[0]   -> 512 MB kernel mapping
 level2_fixmap_pgt[506] -> level1_fixmap_pgt
 ```
 
-Note that we didn't fixup base address of the `early_top_pgt` and some of other page table directories, because we will see this when building/filling structures of these page tables. As we corrected base addresses of the page tables, we can start to build it.
+우리는 `early_top_pgt`의 기본 주소와 일부 다른 페이지 테이블 디렉토리를 고치지 않았습니다. 이 페이지 테이블의 building/filling 구조때 이것이 보이기 때문입니다. 페이지 테이블의 기본 주소를 수정하면 빌드를 시작할 수 있습니다.
 
-Identity mapping setup
+아이디  매핑 설정
 --------------------------------------------------------------------------------
 
-Now we can see the set up of identity mapping of early page tables. In Identity Mapped Paging, virtual addresses are mapped to physical addresses identically. Let's look at it in detail. First of all we replace `pud` and `pmd` with the pointer to first and second entry of `early_dynamic_pgts`:
+이제 초기 페이지 테이블의 아이디 매핑 설정을 볼 수 있습니다. Identity Mapped Paging에서 가상 주소는 물리적 주소에 동일하게 매핑됩니다. 자세히 살펴 보겠습니다. 우선 `pud`와 `pmd`를 `early_dynamic_pgts`의 첫 번째와 두 번째 항목에 대한 포인터로 바꿉니다:
 
 ```C
 	next_pgt_ptr = fixup_pointer(&next_early_pgt, physaddr);
@@ -234,24 +234,24 @@ Now we can see the set up of identity mapping of early page tables. In Identity 
 	pmd = fixup_pointer(early_dynamic_pgts[(*next_pgt_ptr)++], physaddr);
 ```
 
-Let's look at the `early_dynamic_pgts` definition:
+`early_dynamic_pgts` 정의를 봅시다:
 
 ```assembly
 NEXT_PAGE(early_dynamic_pgts)
 	.fill	512*EARLY_DYNAMIC_PAGE_TABLES,8,0
 ```
 
-which will store temporary page tables for early kernel.
+초기 커널에 대한 임시 페이지 테이블을 저장합니다.
 
-Next we initialize `pgtable_flags` which will be used when initializing `p*d` entries later:
+다음으로 `p*d` 항목을 초기화 할 때 사용되는 `pgtable_flags`를 초기화합니다:
 
 ```C
 	pgtable_flags = _KERNPG_TABLE_NOENC + sme_get_me_mask();
 ```
 
-`sme_get_me_mask` function returns `sme_me_mask` which was initialized in `sme_enable` function.
+`sme_get_me_mask`함수는 `sme_enable`함수에서 초기화 된`sme_me_mask`를 반환합니다.
 
-Next we fill two entries of `pgd` with `pud` plus `pgtable_flags` which we initialized above:
+다음으로　`pud`와　`pgtable_flags`로 위에서 두 개의　`pgd` 항목을 채운다:
 
 ```C
 	i = (physaddr >> PGDIR_SHIFT) % PTRS_PER_PGD;
@@ -259,7 +259,7 @@ Next we fill two entries of `pgd` with `pud` plus `pgtable_flags` which we initi
 	pgd[i + 1] = (pgdval_t)pud + pgtable_flags;
 ```
 
-`PGDIR_SHFT` indicates the mask for page global directory bits in a virtual address. Here we calculate modulo with `PTRS_PER_PGD` (which expands to `512`) so as not to access the index greater than `512`. There are macro for all types of page directories:
+｀PGDIR_SHFT｀는 가상 주소의 페이지 글로벌 디렉토리 비트에 대한 마스크를 나타냅니다. 여기에서는　`512`보다 큰 인덱스에 액세스하지 않도록　`PTRS_PER_PGD`(`512`로 확장)로 모듈로를 계산합니다. 모든 유형의 페이지 디렉토리에 대한 매크로가 있습니다：
 
 ```C
 #define PGDIR_SHIFT     39
@@ -270,7 +270,7 @@ Next we fill two entries of `pgd` with `pud` plus `pgtable_flags` which we initi
 #define PTRS_PER_PMD	512
 ```
 
-We do the almost same thing above:
+다음에도 위에서와 같은 일을 합니다：
 
 ```C
 	i = (physaddr >> PUD_SHIFT) % PTRS_PER_PUD;
@@ -278,7 +278,7 @@ We do the almost same thing above:
 	pud[i + 1] = (pudval_t)pmd + pgtable_flags;
 ```
 
-Next we initialize `pmd_entry` and filter out unsupported `__PAGE_KERNEL_*` bits:
+다음으로 `pmd_entry`를 초기화하고 지원되지 않는 `__PAGE_KERNEL_ *` 비트를 걸러냅니다:
 
 ```C
 	pmd_entry = __PAGE_KERNEL_LARGE_EXEC & ~_PAGE_GLOBAL;
@@ -288,7 +288,7 @@ Next we initialize `pmd_entry` and filter out unsupported `__PAGE_KERNEL_*` bits
 	pmd_entry += physaddr;
 ```
 
-Next we fill all `pmd` entries to cover full size of the kernel:
+다음으로 모든 `pmd` 항목을 채워서 커널의 전체 크기를 다룹니다:
 
 ```C
 	for (i = 0; i < DIV_ROUND_UP(_end - _text, PMD_SIZE); i++) {
@@ -297,7 +297,7 @@ Next we fill all `pmd` entries to cover full size of the kernel:
 	}
 ```
 
-Next we fixup the kernel text+data virtual addresses. Note that we might write invalid pmds, when the kernel is relocated (`cleanup_highmap` function fixes this up along with the mappings beyond `_end`).
+다음으로 커널 텍스트 + 데이터 가상 주소를 수정합니다. 커널을 재배치 할 때 유효하지 않은 pmd를 작성할 수 있습니다 (`cleanup_highmap` 함수는 `_end` 이외의 매핑과 함께 이를 수정합니다).
 
 ```C
 	pmd = fixup_pointer(level2_kernel_pgt, physaddr);
@@ -307,36 +307,36 @@ Next we fixup the kernel text+data virtual addresses. Note that we might write i
 	}
 ```
 
-Next we remove the memory encryption mask to obtain the true physical address (remember that `load_delta` includes the mask):
+다음으로 메모리 암호화 마스크를 제거하여 실제 주소를 얻습니다(`load_delta`에 마스크가 포함되어 있음을 기억하십시오):
 
 ```C
 	*fixup_long(&phys_base, physaddr) += load_delta - sme_get_me_mask();
 ```
 
-`phys_base` must match the first entry in `level2_kernel_pgt`.
+`phys_base`는 `level2_kernel_pgt`의 첫 번째 항목과 일치해야합니다.
 
-As final step of `__startup_64` function, we encrypt the kernel (if SME is active) and return the SME encryption mask to be used as a modifier for the initial page directory entry programmed into `cr3` register:
+`__startup_64` 함수의 마지막 단계로 커널을 암호화하고 (SME가 활성화 된 경우) `cr3` 레지스터에 프로그래밍 된 초기 페이지 디렉토리 항목의 제어자로 사용할 SME 암호화 마스크를 반환합니다:
 
 ```C
 	sme_encrypt_kernel(bp);
 	return sme_get_me_mask();
 ```
 
-Now let's get back to assembly code. We prepare for next paragraph with following code:
+이제 어셈블리 코드로 돌아가 봅시다. 다음 코드를 사용하여 다음을 준비합니다:
 
 ```assembly
 	addq	$(early_top_pgt - __START_KERNEL_map), %rax
 	jmp 1f
 ```
 
-which adds physical address of `early_top_pgt` to `rax` register so that `rax` register contains sum of the address and the SME encryption mask.
+`early_top_pgt`의 물리적 주소를 `rax` 레지스터에 추가하여 `rax` 레지스터에 주소와 SME 암호화 마스크의 합이 포함되도록합니다.
 
-That's all for now. Our early paging is prepared and we just need to finish last preparation before we will jump into kernel entry point.
+지금은 여기까지입니다. 초기 페이징이 준비되었으므로 커널 준비 지점으로 이동하기 전에 마지막 준비를 마치면됩니다.
 
-Last preparation before jump at the kernel entry point
+커널 진입 점에서 점프하기 전에 마지막 준비
 --------------------------------------------------------------------------------
 
-After that we jump to the label `1` we enable `PAE`, `PGE` (Paging Global Extension) and put the content of the `phys_base` (see above) to the `rax` register and fill `cr3` register with it:
+그런 다음 레이블 `1`로 이동하여 `PAE`, `PGE` (Paging Global Extension)를 활성화하고 `phys_base`(위 참조)의 내용을 `rax` 레지스터에 넣고`cr3` 레지스터를 채웁니다:
 
 ```assembly
 1:
@@ -347,7 +347,7 @@ After that we jump to the label `1` we enable `PAE`, `PGE` (Paging Global Extens
 	movq	%rax, %cr3
 ```
 
-In the next step we check that CPU supports [NX](http://en.wikipedia.org/wiki/NX_bit) bit with:
+다음 단계에서 CPU가 다음을 사용하여 [NX](http://en.wikipedia.org/wiki/NX_bit)비트를 지원하는지 확인합니다:
 
 ```assembly
 	movl	$0x80000001, %eax
@@ -355,16 +355,16 @@ In the next step we check that CPU supports [NX](http://en.wikipedia.org/wiki/NX
 	movl	%edx,%edi
 ```
 
-We put `0x80000001` value to the `eax` and execute `cpuid` instruction for getting the extended processor info and feature bits. The result will be in the `edx` register which we put to the `edi`.
+`0x80000001` 값을 `eax`에 넣고 확장 프로세서 정보 및 기능 비트를 얻기 위해 `cpuid` 명령을 실행합니다. 결과는 `edi`에 넣은 `edx` 레지스터에 있을 것이다.
 
-Now we put `0xc0000080` or `MSR_EFER` to the `ecx` and execute `rdmsr` instruction for the reading model specific register.
+이제 우리는 `0xc0000080` 또는 `MSR_EFER`를 `ecx`에 넣고 판독 모델 특정 레지스터에 대해 `rdmsr` 명령을 실행합니다.
 
 ```assembly
 	movl	$MSR_EFER, %ecx
 	rdmsr
 ```
 
-The result will be in the `edx:eax`. General view of the `EFER` is following:
+결과는 `edx : eax`에 나타납니다. `EFER`의 일반적인 견해는 다음과 같습니다:
 
 ```
 63                                                                              32
@@ -381,7 +381,7 @@ The result will be in the `edx:eax`. General view of the `EFER` is following:
  --------------------------------------------------------------------------------
 ```
 
-We will not see all fields in details here, but we will learn about this and other `MSRs` in a special part about it. As we read `EFER` to the `edx:eax`, we check `_EFER_SCE` or zero bit which is `System Call Extensions` with `btsl` instruction and set it to one. By the setting `SCE` bit we enable `SYSCALL` and `SYSRET` instructions. In the next step we check 20th bit in the `edi`, remember that this register stores result of the `cpuid` (see above). If `20` bit is set (`NX` bit) we just write `EFER_SCE` to the model specific register.
+여기서 모든 필드를 자세히 볼 수는 없지만 이에 대한 특별한 부분에서 이 필드와 다른 `MSR`에 대해 알아 봅니다. `edx : eax`에 `EFER`을 읽으면서, `btsl` 명령으로 `_EFER_SCE` 또는 `System Call Extensions` 인 0 비트를 체크하고 1로 설정합니다. `SCE` 비트를 설정함으로써 우리는 `SYSCALL`과 `SYSRET` 명령을 활성화합니다. 다음 단계에서 우리는 `edi`에서 20 번째 비트를 검사합니다. 이 레지스터는`cpuid`의 결과를 저장한다는 것을 기억하십시오 (위 참조). 만약 `20` 비트가 설정되면 (`NX` 비트) 우리는 `EFER_SCE`를 모델 특정 레지스터에 씁니다.
 
 ```assembly
 	btsl	$_EFER_SCE, %eax
@@ -392,14 +392,14 @@ We will not see all fields in details here, but we will learn about this and oth
 1:	wrmsr
 ```
 
-If the [NX](https://en.wikipedia.org/wiki/NX_bit) bit is supported we enable `_EFER_NX`  and write it too, with the `wrmsr` instruction. After the [NX](https://en.wikipedia.org/wiki/NX_bit) bit is set, we set some bits in the `cr0` [control register](https://en.wikipedia.org/wiki/Control_register) with following assembly code:
+[NX](https://en.wikipedia.org/wiki/NX_bit)비트가 지원되는 경우 `_EFER_NX`를 활성화하고 `wrmsr`명령을 사용하여 쓰십시오. [NX](https://en.wikipedia.org/wiki/NX_bit)비트가 설정된 후, 우리는 다음 어셈블리 코드를 사용하여 `cr0` [제어 레지스터](https://en.wikipedia.org/wiki/Control_register)에 있는 몇몇 비트들을 설정한다:
 
 ```assembly
 	movl	$CR0_STATE, %eax
 	movq	%rax, %cr0
 ```
 
-specifically the following bits:
+특히 다음 비트들:
 
 * `X86_CR0_PE` - system is in protected mode;
 * `X86_CR0_MP` - controls interaction of WAIT/FWAIT instructions with TS flag in CR0;
@@ -409,7 +409,7 @@ specifically the following bits:
 * `X86_CR0_AM` - alignment check enabled if AM set, AC flag (in EFLAGS register) set, and privilege level is 3;
 * `X86_CR0_PG` - enable paging.
 
-We already know that to run any code, and even more [C](https://en.wikipedia.org/wiki/C_%28programming_language%29) code from assembly, we need to setup a stack. As always, we are doing it by the setting of [stack pointer](https://en.wikipedia.org/wiki/Stack_register) to a correct place in memory and resetting [flags](https://en.wikipedia.org/wiki/FLAGS_register) register after this:
+우리는 코드를 실행하고 어셈블리에서 더 많은 [C](https://en.wikipedia.org/wiki/C_%28programming_language%29) 코드를 실행하려면 스택을 설정해야 한다는 것을 이미 압니다. 항상 그렇듯이 우리는 [스택 포인터](https://en.wikipedia.org/wiki/Stack_register)를 메모리의 올바른 위치로 설정하고 [플래그](https://en.wikipedia.org/wiki/FLAGS_register)를 재설정하여 이 작업을 수행합니다:
 
 ```assembly
 	movq initial_stack(%rip), %rsp
@@ -417,14 +417,14 @@ We already know that to run any code, and even more [C](https://en.wikipedia.org
 	popfq
 ```
 
-The most interesting thing here is the `initial_stack`. This symbol is defined in the [source](https://github.com/torvalds/linux/blob/master/arch/x86/kernel/head_64.S) code file and looks like:
+여기서 가장 흥미로운 것은 `initial_stack`입니다. 이 심볼은 [소스](https://github.com/torvalds/linux/blob/master/arch/x86/kernel/head_64.S)코드 파일에 정의되어 있으며 다음과 같습니다.
 
 ```assembly
 GLOBAL(initial_stack)
     .quad  init_thread_union + THREAD_SIZE - SIZEOF_PTREGS
 ```
 
-The `THREAD_SIZE` macro is defined in the [arch/x86/include/asm/page_64_types.h](https://github.com/torvalds/linux/blob/master/arch/x86/include/asm/page_64_types.h) header file and depends on value of the `KASAN_STACK_ORDER` macro:
+`THREAD_SIZE` 매크로는 [arch/x86/include/asm/page_64_types.h](https://github.com/torvalds/linux/blob/master/arch/x86/include/asm/page_64_types.h)헤더 파일에 정의되어 있습니다. `KASAN_STACK_ORDER` 매크로의 값에 따라 다릅니다:
 
 ```C
 #ifdef CONFIG_KASAN
@@ -437,9 +437,9 @@ The `THREAD_SIZE` macro is defined in the [arch/x86/include/asm/page_64_types.h]
 #define THREAD_SIZE  (PAGE_SIZE << THREAD_SIZE_ORDER)
 ```
 
-We consider when the [kasan](https://github.com/torvalds/linux/blob/master/Documentation/dev-tools/kasan.rst) is disabled and the `PAGE_SIZE` is `4096` bytes. So the `THREAD_SIZE` will expands to `16` kilobytes and represents size of the stack of a thread. Why is `thread`? You may already know that each [process](https://en.wikipedia.org/wiki/Process_%28computing%29) may have [parent processes](https://en.wikipedia.org/wiki/Parent_process) and [child processes](https://en.wikipedia.org/wiki/Child_process). Actually, a parent process and child process differ in stack. A new kernel stack is allocated for a new process. In the Linux kernel this stack is represented by the [union](https://en.wikipedia.org/wiki/Union_type#C.2FC.2B.2B) with the `thread_info` structure.
+[kasan](https://github.com/torvalds/linux/blob/master/Documentation/dev-tools/kasan.rst)이 비활성화되고 `PAGE_SIZE`가 `4096` 바이트 인 경우를 고려합니다. 따라서 `THREAD_SIZE`는 `16`킬로바이트로 확장되며 스레드 스택의 크기를 나타냅니다. 왜 `스레드`입니까? 각 [프로세스](https://en.wikipedia.org/wiki/Process_%28computing%29)에 [부모 프로세스](https://en.wikipedia.org/wiki/Parent_process)와 [자식 프로세스](https://en.wikipedia.org/wiki/Child_process)가 있을 것을 이미 알고 있을 것입니다. 실제로 부모 프로세스와 자식 프로세스는 스택에서 다릅니다. 새로운 프로세스에 새로운 커널 스택이 할당됩니다. 리눅스 커널에서　이 스택은　`thread_info` 구조를 가진 [union](https://en.wikipedia.org/wiki/Union_type#C.2FC.2B.2B)으로 표현됩니다.
 
-The `init_thread_union` is represented by the `thread_union`. And the `thread_union` is defined in the [include/linux/sched.h](https://github.com/torvalds/linux/blob/master/include/linux/sched.h) file like the following:
+`init_thread_union`은　`thread_union`으로 표시됩니다. `thread_union`은 다음과 같이 [include/linux/sched.h](https://github.com/torvalds/linux/blob/master/include/linux/sched.h) 파일에 정의되어 있습니다：
 
 ```C
 union thread_union {
@@ -453,9 +453,9 @@ union thread_union {
 };
 ```
 
-The `CONFIG_ARCH_TASK_STRUCT_ON_STACK` kernel configuration option is only enabled for `ia64` architecture, and the `CONFIG_THREAD_INFO_IN_TASK` kernel configuration option is enabled for `x86_64` architecture. Thus the `thread_info` structure will be placed in `task_struct` structure instead of the `thread_union` union.
+`CONFIG_ARCH_TASK_STRUCT_ON_STACK` 커널 구성 옵션은　`ia64`아키텍처에서만 활성화되며　`CONFIG_THREAD_INFO_IN_TASK` 커널 구성 옵션은　`x86_64` 아키텍처에서 활성화됩니다. 따라서 ｀thread_info｀구조는 ｀thread_union｀공용체 대신 ｀task_struct｀구조에 배치됩니다.
 
-The `init_thread_union` is placed in the [include/asm-generic/vmlinux.lds.h](https://github.com/torvalds/blob/master/include/asm-generic/vmlinux.lds.h) file as part of the `INIT_TASK_DATA` macro like the following:
+`init_thread_union`은 [include/asm-generic/vmlinux.lds.h](https://github.com/torvalds/blob/master/include/asm-generic/vmlinux.lds.h) 파일에 다음과 같은 `INIT_TASK_DATA`매크로의 일부로 배치됩니다:
 
 ```C
 #define INIT_TASK_DATA(align)  \
@@ -465,7 +465,7 @@ The `init_thread_union` is placed in the [include/asm-generic/vmlinux.lds.h](htt
 	...
 ```
 
-This macro is used in the [arch/x86/kernel/vmlinux.lds.S](https://github.com/torvalds/linux/blob/master/arch/x86/kernel/vmlinux.lds.S) file like the following:
+이 매크로는 [arch/x86/kernel/vmlinux.lds.S](https://github.com/torvalds/linux/blob/master/arch/x86/kernel/vmlinux.lds.S)파일에서 사용됩니다 다음과 같이:
 
 ```
 .data : AT(ADDR(.data) - LOAD_OFFSET) {
@@ -475,24 +475,24 @@ This macro is used in the [arch/x86/kernel/vmlinux.lds.S](https://github.com/tor
 } :data
 ```
 
-That is, `init_thread_union` is initialized with the address which is aligned to `THREAD_SIZE` which is `16` kilobytes.
+즉, `init_thread_union`은 `16`킬로바이트인 `THREAD_SIZE`에 정렬 된 주소로 초기화된다.
 
-Now we may understand this expression:
+이제 우리는 이 표현을 이해할 수 있습니다:
 
 ```assembly
 GLOBAL(initial_stack)
     .quad  init_thread_union + THREAD_SIZE - SIZEOF_PTREGS
 ```
 
-that `initial_stack` symbol points to the start of the `thread_union.stack` array + `THREAD_SIZE` which is 16 killobytes and - `SIZEOF_PTREGS` which is convention which helps the in-kernel unwinder reliably detect the end of the stack.
+`initial_stack` 기호는 16 킬로바이트인 `thread_union.stack` 배열 +`THREAD_SIZE`의 시작과 커널 내 언와인더가 스택의 끝을 안정적으로 감지하는 데 도움이되는 규칙 인`SIZEOF_PTREGS`를 나타냅니다.
 
-After the early boot stack is set, to update the [Global Descriptor Table](https://en.wikipedia.org/wiki/Global_Descriptor_Table) with the `lgdt` instruction:
+초기 부팅 스택을 설정 한 후,`lgdt`명령으로 [글로벌 디스크립터 테이블](https://en.wikipedia.org/wiki/Global_Descriptor_Table)을 업데이트합니다:
 
 ```assembly
 lgdt	early_gdt_descr(%rip)
 ```
 
-where the `early_gdt_descr` is defined as:
+여기서 `early_gdt_descr`은 다음과 같이 정의됩니다:
 
 ```assembly
 early_gdt_descr:
@@ -501,11 +501,11 @@ early_gdt_descr_base:
 	.quad	INIT_PER_CPU_VAR(gdt_page)
 ```
 
-We need to reload `Global Descriptor Table` because now kernel works in the low userspace addresses, but soon kernel will work in its own space.
+커널은 낮은 사용자 공간 주소에서 작동하지만 곧 커널은 자체 공간에서 작동하기 때문에 `글로벌 디스크럽터 테이블`을 다시 로드해야합니다.
 
-Now let's look at the definition of `early_gdt_descr`. `GDT_ENTRIES` expands to `32` so that Global Descriptor Table contains `32` entries for kernel code, data, thread local storage segments and etc...
+이제 `early_gdt_descr`의 정의를 보자. `GDT_ENTRIES`는 `32`로 확장되어 글로벌 디스크럽터 테이블에 커널 코드, 데이터, 스레드 로컬 스토리지 세그먼트 등에 대한 `32` 항목이 포함됩니다.
 
-Now let's look at the definition of `early_gdt_descr_base`. The `gdt_page` structure is defined in the [arch/x86/include/asm/desc.h](https://github.com/torvalds/linux/blob/master/arch/x86/include/asm/desc.h) as:
+이제 `early_gdt_descr_base`의 정의를 보자. `gdt_page`구조는 [arch/x86/include/asm/desc.h](https://github.com/torvalds/linux/blob/master/arch/x86/include/asm/desc.h)에 정의되어 있습니다:
 
 ```C
 struct gdt_page {
@@ -513,7 +513,7 @@ struct gdt_page {
 } __attribute__((aligned(PAGE_SIZE)));
 ```
 
-It contains one field `gdt` which is array of the `desc_struct` structure which is defined as:
+여기에는 다음과 같이 정의되는 `desc_struct` 구조의 배열인 하나의 필드 `gdt`가 포함됩니다:
 
 ```C
 struct desc_struct {
@@ -532,26 +532,27 @@ struct desc_struct {
  } __attribute__((packed));
 ```
 
+친숙한 `GDT` 디스크립터가 보입니다. `gdt_page` 구조는 `4096`바이트 인 `PAGE_SIZE`에 맞춰집니다. 이것은 `gdt`가 한 페이지를 차지한다는 것을 의미합니다.
 which looks familiar `GDT` descriptor. Note that `gdt_page` structure is aligned to `PAGE_SIZE` which is `4096` bytes. Which means that `gdt` will occupy one page.
 
-Now let's try to understand what `INIT_PER_CPU_VAR` is. `INIT_PER_CPU_VAR` is a macro which is defined in the [arch/x86/include/asm/percpu.h](https://github.com/torvalds/linux/blob/master/arch/x86/include/asm/percpu.h) and just concatenates `init_per_cpu__` with the given parameter:
+이제 `INIT_PER_CPU_VAR`이 무엇인지 이해해 봅시다. `INIT_PER_CPU_VAR`은 [arch/x86/include/asm/percpu.h](https://github.com/torvalds/linux/blob/master/arch/x86/include/asm/percpu.h)에 정의 된 매크로입니다. 그리고 주어진 매개 변수로 `init_per_cpu__`를 연결합니다.
 
 ```C
 #define INIT_PER_CPU_VAR(var) init_per_cpu__##var
 ```
 
-After the `INIT_PER_CPU_VAR` macro will be expanded, we will have `init_per_cpu__gdt_page`. We can see the initialization of `init_per_cpu__gdt_page` in the [linker script](https://github.com/torvalds/linux/blob/master/arch/x86/kernel/vmlinux.lds.S):
+`INIT_PER_CPU_VAR` 매크로가 확장 된 후, 우리는 `init_per_cpu__gdt_page`를 갖게됩니다. [링커 스크립터](https://github.com/torvalds/linux/blob/master/arch/x86/kernel/vmlinux.lds.S)에서 `init_per_cpu__gdt_page`의 초기화를 볼 수 있습니다.
 
 ```
 #define INIT_PER_CPU(x) init_per_cpu__##x = x + __per_cpu_load
 INIT_PER_CPU(gdt_page);
 ```
 
-As we got `init_per_cpu__gdt_page` in `INIT_PER_CPU_VAR` and `INIT_PER_CPU` macro from linker script will be expanded we will get offset from the `__per_cpu_load`. After this calculations, we will have correct base address of the new GDT.
+`INIT_PER_CPU_VAR`에 `init_per_cpu__gdt_page`가 있고 링커 스크립트에서 `INIT_PER_CPU` 매크로가 확장되면 `__per_cpu_load`에서 오프셋을 얻습니다. 이 계산 후에는 새 GDT의 정확한 기본 주소를 갖게됩니다.
 
-Generally per-CPU variables is a 2.6 kernel feature. You can understand what it is from its name. When we create `per-CPU` variable, each CPU will have its own copy of this variable. Here we are creating `gdt_page` per-CPU variable. There are many advantages for variables of this type, like there are no locks, because each CPU works with its own copy of variable and etc... So every core on multiprocessor will have its own `GDT` table and every entry in the table will represent a memory segment which can be accessed from the thread which ran on the core. You can read in details about `per-CPU` variables in the [Concepts/per-cpu](https://0xax.gitbooks.io/linux-insides/content/Concepts/linux-cpu-1.html) post.
+일반적으로 CPU 별 변수는 2.6 커널 기능입니다. 이름에서 무엇인지 이해할 수 있습니다. 우리가 `per-CPU '변수를 만들면, 각 CPU는 이 변수의 자체 복사본을 갖게됩니다. 여기서 우리는 CPU 당 `gdt_page`를 만들고 있습니다. 각 CPU가 고유한 변수 사본 등으로 작동하므로 잠금이없는 것처럼 이 유형의 변수에는 많은 이점이 있습니다. 따라서 멀티 프로세서의 모든 코어에는 자체 `GDT`테이블과 코어에서 실행 된 스레드에서 액세스 할 수있는 메모리 세그먼트를 나타내는 테이블의 모든 항목이 있습니다. [Concepts/per-cpu](https://0xax.gitbooks.io/linux-insides/content/Concepts/linux-cpu-1.html) 포스트에서 `per-CPU`변수에 대한 자세한 내용을 읽을 수 있습니다.
 
-As we loaded new Global Descriptor Table, we reload segments as we did it every time:
+새로운　글로벌　디스크럽터　테이블을　로드 할 때마다 매번 수행 한 것처럼 세그먼트를 다시로드합니다：
 
 ```assembly
 	xorl %eax,%eax
@@ -562,7 +563,7 @@ As we loaded new Global Descriptor Table, we reload segments as we did it every 
 	movl %eax,%gs
 ```
 
-After all of these steps we set up `gs` register that it post to the `irqstack` which represents special stack where [interrupts](https://en.wikipedia.org/wiki/Interrupt) will be handled on:
+이 모든 단계 후에 `gs` 레지스터를 설정하여 [interrupts](https://en.wikipedia.org/wiki/Interrupt)가 처리 될 특별한 스택을 나타내는　`irqstack`에 게시합니다:
 
 ```assembly
 	movl	$MSR_GS_BASE,%ecx
@@ -571,7 +572,7 @@ After all of these steps we set up `gs` register that it post to the `irqstack` 
 	wrmsr
 ```
 
-where `MSR_GS_BASE` is:
+여기서 MSR_GS_BASE는 다음과 같습니다:
 
 ```C
 #define MSR_GS_BASE             0xc0000101
@@ -662,7 +663,7 @@ After this we clear `_bss` from the `__bss_stop` to `__bss_start` and also clear
 NEXT_PGD_PAGE(init_top_pgt)
 	.fill	512,8,0
 	.fill	PTI_USER_PGD_FILL,8,0
-``` 
+```
 
 This is exactly the same definition as `early_top_pgt`.
 
