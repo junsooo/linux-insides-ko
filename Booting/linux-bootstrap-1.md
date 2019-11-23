@@ -92,7 +92,7 @@ _start:
 
 여기서 우리는 `jmp` 명령어의 [기계어 코드](http://ref.x86asm.net/coder32.html#xE9)인 `0xe9`를 볼 수 있습니다, 그리고 목적지 주소는 `_start16bit - ( . + 2)` 입니다.
 
-우리는 또한 `rest` 섹션의 `16` 바이트를 볼 수 있습니다. 그리고 그것은 `0xfffffff0` 주소에서 시작하기 위해 컴파일 됩니다. (`src/cpu/x86/16bit/reset16.ld`):
+우리는 또한 `reset` 섹션의 `16` 바이트를 볼 수 있습니다. 그리고 그것은 `0xfffffff0` 주소에서 시작하기 위해 컴파일 됩니다. (`src/cpu/x86/16bit/reset16.ld`):
 
 ```
 SECTIONS {
@@ -219,7 +219,7 @@ hdr:
     boot_flag:   .word 0xAA55
 ```
 
-부트로더는 반드시 이 것과 헤더의 나머지 부분(Linux 부트 프로토콜에서 오직 `wrtie` 타입으로 표시된 것만, [이 예시와 같이](https://github.com/torvalds/linux/blob/v4.16/Documentation/x86/boot.txt#L354)) 을 커맨드 라인으로부터 받았거나 부팅 중에 계산된 값으로 채워야 합니다. (지금은 커널 구성 헤더의 모든 필드에 대한 모든 설명을 하지는 않을 것입니다, 하지만 우리는 커널이 이것을 어떻게 사용하는지에 대해 논의할 때 할 것입니다; 모든 필드에 대한 설명은 [부트 프로토콜](https://github.com/torvalds/linux/blob/v4.16/Documentation/x86/boot.txt#L156)에서 찾을 수 있습니다.)
+부트로더는 반드시 이 것과 헤더의 나머지 부분(Linux 부트 프로토콜에서 오직 `write` 타입으로 표시된 것만, [이 예시와 같이](https://github.com/torvalds/linux/blob/v4.16/Documentation/x86/boot.txt#L354)) 을 커맨드 라인으로부터 받았거나 부팅 중에 계산된 값으로 채워야 합니다. (지금은 커널 구성 헤더의 모든 필드에 대한 모든 설명을 하지는 않을 것입니다, 하지만 우리는 커널이 이것을 어떻게 사용하는지에 대해 논의할 때 할 것입니다; 모든 필드에 대한 설명은 [부트 프로토콜](https://github.com/torvalds/linux/blob/v4.16/Documentation/x86/boot.txt#L156)에서 찾을 수 있습니다.)
 
 
 커널 부트 프로토콜에서 볼 수 있듯이, 커널이 로딩된 후 메모리는 이렇게 맵핑 될 것입니다.
