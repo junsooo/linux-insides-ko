@@ -259,8 +259,7 @@ X + sizeof(KernelBootSector) + 1
 여기서 X는 로드되고 있는 커널 부트 섹터의 주소입니다. 제 경우에는 메모리 덤프에서 볼 수 있듯이 `X`는 `0x10000`입니다.
 
 
-![커널 첫 번째 주소](http://oi57.tinypic.com/16bkco2.jpg)
-![kernel first address](images/kernel_first_address.png)
+![커널 첫 번째 주소](images/kernel_first_address.png)
 
 이제 부트로더는 리눅스 커널을 메모리에 로드했습니다, 헤더 필드들을 채웠고, 그러고 나서는 해당하는 메모리 주소로 점프했습니다. 우리는 이제 바로 커널 구성 코드로 이동 할 수 있습니다.
 
