@@ -1,31 +1,31 @@
-Timers and time management in the Linux kernel. Part 1.
+﻿리눅스 커널의 타이머와 시간관리 Part 1.
 ================================================================================
 
-Introduction
+소개글
 --------------------------------------------------------------------------------
 
-This is yet another post that opens a new chapter in the [linux-insides](https://0xax.gitbooks.io/linux-insides/content/) book. The previous [part](https://0xax.gitbooks.io/linux-insides/content/SysCall/linux-syscall-4.html) described [system call](https://en.wikipedia.org/wiki/System_call) concepts, and now it's time to start new chapter. As one might understand from the title, this chapter will be devoted to the `timers` and `time management` in the Linux kernel. The choice of topic for the current chapter is not accidental. Timers (and generally, time management) are very important and widely used in the Linux kernel. The Linux kernel uses timers for various tasks, for example different timeouts in the [TCP](https://en.wikipedia.org/wiki/Transmission_Control_Protocol) implementation, the kernel knowing current time, scheduling asynchronous functions, next event interrupt scheduling and many many more.
+이 글은  [linux-insides](https://0xax.gitbooks.io/linux-insides/content/) 책에서 새로운 장을 여는 글입니다. 이전의  [part](https://0xax.gitbooks.io/linux-insides/content/SysCall/linux-syscall-4.html) 는 [system call](https://en.wikipedia.org/wiki/System_call) 의 개념을 설명했으며, 이제 새로운 장을 시작할 차례입니다. 제목에서도 알 수 있듯이 , 이 장에서  리눅스 커널에서 `타이머` 와 `시간관리` 에 대해 다룰 것입니다. 현재 장에 대한 주제 선택은 우연이 아닙니다. 타이머 (및 일반적으로 시간관리)는 리눅스 커널에서 매우 중요하며 널리 사용됩니다. 리눅스 커널은  [TCP](https://en.wikipedia.org/wiki/Transmission_Control_Protocol) 구현에서 다른 시간 초과와 같은 다양한 작업에 타이머를 사용합니다, 커널은 현재 시간, 비동기 함수 스케줄링, 다음 이벤트 인터럽트 스케줄링등 다양한 작업에 타이멀르 사용합니다.
 
-So, we will start to learn implementation of the different time management related stuff in this part. We will see different types of timers and how different Linux kernel subsystems use them. As always, we will start from the earliest part of the Linux kernel and go through the initialization process of the Linux kernel. We already did it in the special [chapter](https://0xax.gitbooks.io/linux-insides/content/Initialization/index.html) which describes the initialization process of the Linux kernel, but as you may remember we missed some things there. And one of them is the initialization of timers.
+그래서 우리는 여기서 다른 시간관리와 관련된 구현을 배울것 입니다. 우리는 다른유형의 타이머를 살펴보고 리눅스 커널의 하위시스템이 사용하는 방식이 어떻게 다른지 살펴 보겠습니다. 언제나 그렇듯이, 리눅스 커널의 가장 앞 부분부터 시작하여 리눅스커널의 초기화 과정을 거치게 됩니다.  우리는 이미 [chapter](https://0xax.gitbooks.io/linux-insides/content/Initialization/index.html) 에서 리눅스 커널의 초기화 과정을 설명하였습니다, 기억이 나겠지만 우리는 chapter에서 몇가지를 넘겼습니다. 그 중 하나는 타이머 초기화 입니다.
 
-Let's start.
+시작해봅시다.
 
-Initialization of non-standard PC hardware clock
+비표준 pc 하드웨어 시계 초기화 
 --------------------------------------------------------------------------------
 
-After the Linux kernel was decompressed (more about this you can read in the [Kernel decompression](https://0xax.gitbooks.io/linux-insides/content/Booting/linux-bootstrap-5.html) part) the architecture non-specific code starts to work in the [init/main.c](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/init/main.c) source code file. After initialization of the [lock validator](https://www.kernel.org/doc/Documentation/locking/lockdep-design.txt), initialization of [cgroups](https://en.wikipedia.org/wiki/Cgroups) and setting [canary](https://en.wikipedia.org/wiki/Buffer_overflow_protection) value we can see the call of the `setup_arch` function.
+리눅스 커널이 압축 해제 된 후 (더 자세한 내용은 [Kernel decompression](https://0xax.gitbooks.io/linux-insides/content/Booting/linux-bootstrap-5.html) 의 압축 해제 부분을 참조) 아키텍쳐 비 특정 코드가 [init/main.c](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/init/main.c) 소스 코드 파일에서 작동하기 시작합니다. [lock validator](https://www.kernel.org/doc/Documentation/locking/lockdep-design.txt),을 초기화 해주고 [cgroups](https://en.wikipedia.org/wiki/Cgroups) 을 초기화 및 [canary](https://en.wikipedia.org/wiki/Buffer_overflow_protection) 값을 설정후  `setup_arch` 함수의 호출을 볼 수 있습니다.
 
-As you may remember, this function (defined in the [arch/x86/kernel/setup.c](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/arch/x86/kernel/setup.c#L842)) prepares/initializes architecture-specific stuff (for example it reserves a place for [bss](https://en.wikipedia.org/wiki/.bss) section, reserves a place for [initrd](https://en.wikipedia.org/wiki/Initrd), parses kernel command line, and many, many other things). Besides this, we can find some time management related functions there.
+기억하겠지만, 이 함수 (defined in the [arch/x86/kernel/setup.c](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/arch/x86/kernel/setup.c#L842))는 아키텍쳐 관련 항목을 준비/초기화 합니다. (예: [bss](https://en.wikipedia.org/wiki/.bss)섹션을 위한 공간을 예약하고 [initrd](https://en.wikipedia.org/wiki/Initrd),를 위한 장소를 예약하고 커널 명령 줄의 구문을 분석외에 많은 것들을 합니다.). 이 외에도 시간 관리 관련 기능들이 있습니다.
 
-The first is:
+첫번째는:
 
 ```C
 x86_init.timers.wallclock_init();
 ```
 
-We already saw `x86_init` structure in the chapter that describes initialization of the Linux kernel. This structure contains pointers to the default setup functions for the different platforms like [Intel MID](https://en.wikipedia.org/wiki/Mobile_Internet_device#Intel_MID_platforms), [Intel CE4100](http://www.wpgholdings.com/epaper/US/newsRelease_20091215/255874.pdf), etc. The `x86_init` structure is defined in the [arch/x86/kernel/x86_init.c](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/arch/x86/kernel/x86_init.c#L36), and as you can see it determines standard PC hardware by default.
+우리는 리눅스 커널의 초기화를 설명하는 장에서 `x86_init`구조를 보았습니다. 이 구조에는 [Intel MID](https://en.wikipedia.org/wiki/Mobile_Internet_device#Intel_MID_platforms), [Intel CE4100](http://www.wpgholdings.com/epaper/US/newsRelease_20091215/255874.pdf),등과 같은 다양한 플랫폼의 기본 설정 기능에 대한 포인터가 포함되어 있습니다. `x86_init`구조는 [arch/x86/kernel/x86_init.c](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/arch/x86/kernel/x86_init.c#L36),에 정의 되어있으며 기본적으로 표준 PC하드웨어를 결정합니다.
 
-As we can see, the `x86_init` structure has the `x86_init_ops` type that provides a set of functions for platform specific setup like reserving standard resources, platform specific memory setup, initialization of interrupt handlers, etc. This structure looks like:
+보시다 시피 `x86_init`구조에는 표준 자원 예약, 플랫폼 특정 메모리 설정, 인터럽트 핸들러 초기화 등과 같은 플랫폼 특정 설정을 위한 기능 세트를 제공하는 `x86_init_ops`유형이 있습니다. 이 구조는 다음과 같습니다:
 
 ```C
 struct x86_init_ops {
@@ -40,14 +40,14 @@ struct x86_init_ops {
 };
 ```
 
-Note the `timers` field that has the `x86_init_timers` type. We can understand by its name that this field is related to time management and timers. `x86_init_timers` contains four fields which are all functions that returns pointer on [void](https://en.wikipedia.org/wiki/Void_type):
+유형이 `timers`이 있는 필드를 적어 `x86_init_timers` 저장합니다. 이 필드는 시간 관리 및 타이머와 관련이 있음을 그 이름으로 이해할 수 있습니다. `x86_init_timers` 에는 [void](https://en.wikipedia.org/wiki/Void_type)에 대한 포인터를 반환하는 모든 함수 4개의 필드가 있습니다.:
 
-* `setup_percpu_clockev` - set up the per cpu clock event device for the boot cpu;
-* `tsc_pre_init` - platform function called before [TSC](https://en.wikipedia.org/wiki/Time_Stamp_Counter) init;
-* `timer_init` - initialize the platform timer;
-* `wallclock_init` - initialize the wallclock device.
+* `setup_percpu_clockev` - 부팅 cpu에 cpu당 이벤트 장치 설정;
+* `tsc_pre_init` - [TSC](https://en.wikipedia.org/wiki/Time_Stamp_Counter) 이전에 호출 된 플랫폼 기능;
+* `timer_init` - 플랫폼 타이머 초기화;
+* `wallclock_init` - 벽시계 장치 초기화.
 
-So, as we already know, in our case the `wallclock_init` executes initialization of the wallclock device. If we look on the `x86_init` structure, we see that `wallclock_init` points to the `x86_init_noop`:
+우리가 이미 알고 있듯이, 이 경우에는  `wallclock_init`에는 벽시계장치의 초기화를 실행합니다. `x86_init` 구조를 보면, `wallclock_init` 가 `x86_init_noop`을 가르키는 것으로 볼수 있습니다.:
 
 ```C
 struct x86_init_ops x86_init __initdata = {
@@ -63,13 +63,13 @@ struct x86_init_ops x86_init __initdata = {
 }
 ```
 
-Where the `x86_init_noop` is just a function that does nothing:
+여기서 `x86_init_noop` 은 아무것도 수행하지 않는 함수입니다.:
 
 ```C
 void __cpuinit x86_init_noop(void) { }
 ```
 
-for the standard PC hardware. Actually, the `wallclock_init` function is used in the [Intel MID](https://en.wikipedia.org/wiki/Mobile_Internet_device#Intel_MID_platforms) platform. Initialization of the `x86_init.timers.wallclock_init` is located in the [arch/x86/platform/intel-mid/intel-mid.c](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/arch/x86/platform/intel-mid/intel-mid.c) source code file in the `x86_intel_mid_early_setup` function:
+표준 PC 하드웨어용, the `wallclock_init` 함수는 [Intel MID](https://en.wikipedia.org/wiki/Mobile_Internet_device#Intel_MID_platforms) 플랫폼에서 사용됩니다. `x86_init.timers.wallclock_init` 의 초기화는 [arch/x86/platform/intel-mid/intel-mid.c](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/arch/x86/platform/intel-mid/intel-mid.c) 함수의 `x86_intel_mid_early_setup` 소스 코드 파일에 있습니다.:
 
 ```C
 void __init x86_intel_mid_early_setup(void)
@@ -84,7 +84,7 @@ void __init x86_intel_mid_early_setup(void)
 }
 ```
 
-Implementation of the `intel_mid_rtc_init` function is in the [arch/x86/platform/intel-mid/intel_mid_vrtc.c](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/arch/x86/platform/intel-mid/intel_mid_vrtc.c) source code file and looks pretty simple. First of all, this function parses [Simple Firmware Interface](https://en.wikipedia.org/wiki/Simple_Firmware_Interface) M-Real-Time-Clock table for getting such devices to the `sfi_mrtc_array` array and initialization of the `set_time` and `get_time` functions:
+`intel_mid_rtc_init`함수의 구현은 [arch/x86/platform/intel-mid/intel_mid_vrtc.c](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/arch/x86/platform/intel-mid/intel_mid_vrtc.c) 소스코드 파일에 있으며 매우 단순해 보입니다. 우선, 이 함수는 이러한 장치를 [Simple Firmware Interface](https://en.wikipedia.org/wiki/Simple_Firmware_Interface) M-Real-Time-Clock 테이블을  분석하여 `sfi_mrtc_array` 배열로 가져오고  `set_time` 및 `get_time` 함수를 초기화 합니다.:
 
 ```C
 void __init intel_mid_rtc_init(void)
@@ -105,36 +105,36 @@ void __init intel_mid_rtc_init(void)
 }
 ```
 
-That's all, after this a device based on `Intel MID` will be able to get time from the hardware clock. As I already wrote, the standard PC [x86_64](https://en.wikipedia.org/wiki/X86-64) architecture does not support `x86_init_noop` and just do nothing during call of this function. We just saw initialization of the [real time clock](https://en.wikipedia.org/wiki/Real-time_clock) for the [Intel MID](https://en.wikipedia.org/wiki/Mobile_Internet_device#Intel_MID_platforms) architecture, now it's time to return to the general `x86_64` architecture and will look on the time management related stuff there.
+그 후에는 `Intel MID` 기반 장치가 하드웨어 시계에서 시간을 얻을 수 있습니다. 이미 작성한 것처럼, 표준 PC[x86_64](https://en.wikipedia.org/wiki/X86-64) 아키텍처는 `x86_init_noop` 을 지원하지 않으며 이 함수를 호출하는 동안 아무것도 하지 않습니다. 방금 [real time clock](https://en.wikipedia.org/wiki/Real-time_clock) 이[Intel MID](https://en.wikipedia.org/wiki/Mobile_Internet_device#Intel_MID_platforms) 아키테처에 대해 초기화 되는걸 보았습니다, 이제 일반적인 `x86_64` 아키텍처로 돌아가서 시간 관리 관련 내용을 살펴보겠습니다.
 
-Acquainted with jiffies
+지피 알아보기
 --------------------------------------------------------------------------------
 
-If we return to the `setup_arch` function (which is located, as you remember, in the  [arch/x86/kernel/setup.c](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/arch/x86/kernel/setup.c#L842) source code file), we see the next call of the time management related function:
+`setup_arch` 함수 (which is located, as you remember, in the  [arch/x86/kernel/setup.c](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/arch/x86/kernel/setup.c#L842) 소스 코드 파일에 있습니다.)로 돌아가면 시간 관리 관련 함수의 다음 호출이 표시됩니다.:
 
 ```C
 register_refined_jiffies(CLOCK_TICK_RATE);
 ```
 
-Before we look at the implementation of this function, we must know about [jiffy](https://en.wikipedia.org/wiki/Jiffy_%28time%29). As we can read on wikipedia:
+이 함수의 구현을 보기 전에  [jiffy](https://en.wikipedia.org/wiki/Jiffy_%28time%29). 에 대해 알아야 합니다.  wikipedia에서 관련 내용을 읽을수 있습니다.:
 
 ```
 Jiffy is an informal term for any unspecified short period of time
 ```
 
-This definition is very similar to the `jiffy` in the Linux kernel. There is global variable with the `jiffies` which holds the number of ticks that have occurred since the system booted. The Linux kernel sets this variable to zero:
+이 정의는 리눅스 커널의 `jiffy` 와 매우 유사합니다. 시스템 부팅 이후 발생한 틱 수를 보유하는  `jiffies`를 가진 전역변수가 있습니다. 리눅스 커널은 이 변수를 0으로 설정합니다.:
 
 ```C
 extern unsigned long volatile __jiffy_data jiffies;
 ```
 
-during initialization process. This global variable will be increased each time during timer interrupt. Besides this, near the `jiffies` variable we can see the definition of the similar variable
+초기화 과정에서. 이 전역변수는 타이머 인터럽트 동안 매번 증가합니다. 이 외에도 `jiffies` 변수 근처에서 비슷한 변수의 정의를 볼 수 있습니다.
 
 ```C
 extern u64 jiffies_64;
 ```
 
-Actually, only one of these variables is in use in the Linux kernel, and it depends on the processor type. For the [x86_64](https://en.wikipedia.org/wiki/X86-64) it will be `u64` use and for the [x86](https://en.wikipedia.org/wiki/X86) it's `unsigned long`. We see this looking at the [arch/x86/kernel/vmlinux.lds.S](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/arch/x86/kernel/vmlinux.lds.S) linker script:
+실제로 이러한 변수 중 하나만 리눅스 커널에서 사용되며 프로세서 유형에 따라 다릅니다. [x86_64](https://en.wikipedia.org/wiki/X86-64) 의 경우 `u64` 를 사용하고  [x86](https://en.wikipedia.org/wiki/X86) 의 경우  `unsigned long` 입니다. 우리는 이것을 [arch/x86/kernel/vmlinux.lds.S](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/arch/x86/kernel/vmlinux.lds.S) 링커 스트립트를 보고 있습니다.:
 
 ```
 #ifdef CONFIG_X86_32
@@ -148,7 +148,7 @@ jiffies_64 = jiffies;
 #endif
 ```
 
-In the case of `x86_32` the `jiffies` will be the lower `32` bits of the `jiffies_64` variable. Schematically, we can imagine it as follows
+`x86_32`의 경우 `jiffies`는  하위 `32` 비트의 `jiffies_64`의 변수입니다. 계획적으로, 다음과 같이 상상할수 있습니다.
 
 ```
                     jiffies_64
@@ -162,19 +162,20 @@ In the case of `x86_32` the `jiffies` will be the lower `32` bits of the `jiffie
 63                     31                             0
 ```
 
-Now we know a little theory about `jiffies` and can return to our function. There is no architecture-specific implementation for our function - the `register_refined_jiffies`. This function is located in the generic kernel code - [kernel/time/jiffies.c](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/kernel/time/jiffies.c) source code file. Main point of the `register_refined_jiffies` is registration of the jiffy `clocksource`. Before we look on the implementation of the `register_refined_jiffies` function, we must know what `clocksource` is. As we can read in the comments:
+이제 우리는 `jiffies` 에 대한 약간의 이론을 알게 되었고 함수의 리턴값을 알 수 있습니다. 함수에 대한 아키텍처 별 구현이 없습니다. -  `register_refined_jiffies`. 이 함수는 일반적인 커널 코드에 있습니다 - [kernel/time/jiffies.c](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/kernel/time/jiffies.c) 소스 코드 파일에 있습니다. `register_refined_jiffies`의 요점은 순간 `clocksource`의 등록입니다. `register_refined_jiffies` 함수의 구현을 살펴 보기 전에 , 우리는 `clocksource`가 뭔지 알아야 합니다. 주석에서 읽을수 있습니다. :
 
 ```
 The `clocksource` is hardware abstraction for a free-running counter.
 ```
 
-I'm not sure about you, but that description didn't give a good understanding about the `clocksource` concept. Let's try to understand what is it, but we will not go deeper because this topic will be described in a separate part in much more detail. The main point of the `clocksource` is timekeeping abstraction or in very simple words - it provides a time value to the kernel. We already know about the `jiffies` interface that represents number of ticks that have occurred since the system booted. It is represented by a global variable in the Linux kernel and increases each timer interrupt. The Linux kernel can use `jiffies` for time measurement. So why do we need in separate context like the `clocksource`? Actually, different hardware devices provide different clock sources that are varied in their capabilities. The availability of more precise techniques for time intervals measurement is hardware-dependent.
+당신에 대해 알지는 못하지만 `clocksource` 의 설명은 이해하기 좋은 소스코드가 아닙니다.  이게 무엇인지 이해하여 봅시다, 그러나 이 주제는 별도의 부분에서 훨씬 자세하게 설명되므로 따로 더 깊이 들어 가지는 않겠습니다. `clocksource` 의 요점은 타임키핑의 추상화 또는 매우 간단한 단어로 커널에 시간값을 제공합니다. 우리는 이미 시스템 부팅 이후 발생한 틱수를 나타내는 `jiffies` 인터페이스에 대해 알고 있습니다. 리눅스 커널에서 전역변수로 표시되며 각 타이머 인터럽트가 증가합니다. 리눅스 커널은 시간측정에 `jiffies` 를 사용할수 있습니다. 그렇다면 왜 우리는  `clocksource`와 같은 별도의 상황이 필요할까요? 실제로, 하드웨어 장치의 기능에 따라 다른 클럭 소스를 제공합니다. 시간의 간격측정에 대한 보다 정확한 기술의 가용성은 하드웨어에 따라 다릅니다.
 
-For example `x86` has on-chip a 64-bit counter that is called [Time Stamp  Counter](https://en.wikipedia.org/wiki/Time_Stamp_Counter) and its frequency can be equal to processor frequency. Or for example the [High Precision Event Timer](https://en.wikipedia.org/wiki/High_Precision_Event_Timer), that consists of a `64-bit` counter of at least `10 MHz` frequency. Two different timers and they are both for `x86`. If we will add timers from other architectures, this only makes this problem more complex. The Linux kernel provides the `clocksource` concept to solve the problem.
+예를 들어 `x86`에는 [Time Stamp  Counter](https://en.wikipedia.org/wiki/Time_Stamp_Counter) 라고 하는 64 비트 카운터가 내장 되어있으며 주파수는 프로세서의 주파수와 같습니다. 또 다른 예로는 [High Precision Event Timer](https://en.wikipedia.org/wiki/High_Precision_Event_Timer)는 최소 `10 MHz` 주파수의 `64-bit` 카운터로 구성됩니다.두개의 다른 타이머와 둘 다  `x86`입니다.다른 아키텍처의 타이머를 추가하면 문제가 더 복잡해 집니다. 리눅스 커널은 이러한 문제를 해결하기 위해 `clocksource` 의 개념을 제공합니다.
 
-The clocksource concept is represented by the `clocksource` structure in the Linux kernel. This structure is defined in the [include/linux/clocksource.h](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/include/linux/clocksource.h) header file and contains a couple of fields that describe a time counter. For example, it contains - `name` field which is the name of a counter, `flags` field that describes different properties of a counter, pointers to the `suspend` and `resume` functions, and many more.
+`clocksource` 의 개념은 리눅스 커널에서  `clocksource` 의 구조로 표현 됩니다. 이 구조는[include/linux/clocksource.h](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/include/linux/clocksource.h) 헤다파일에 정의 되어있으며 시간을 설명하는 두개의 필드를 포함합니다. 예를 들어, 카운터의 이름인 `name`필드, 카운터의 다른 속성을 설명하는`flags` 필드, 함수의 포인터를 표현하는 `suspend` 및 `resume` 등을 포함합니다.
 
-Let's look at the `clocksource` structure for jiffies that is defined in the [kernel/time/jiffies.c](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/kernel/time/jiffies.c) source code file:
+[kernel/time/jiffies.c](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/kernel/time/jiffies.c) 소스에 정의 된 `jiffies`에 대한 `clocksource`구조를 살펴 보겠습니다.
+ 코드파일:
 
 ```C
 static struct clocksource clocksource_jiffies = {
@@ -188,15 +189,15 @@ static struct clocksource clocksource_jiffies = {
 };
 ```
 
-We can see the definition of the default name here - `jiffies`. The next is the `rating` field, which allows the best registered clock source to be chosen by the clock source management code available for the specified hardware. The `rating` may have following value:
+우리는 여기서 기본 이름의 정의인  `jiffies`. 를 볼 수 있습니다.  다음은`rating` 필드로, 지정된 하드웨어에 사용 가능한 시간 관리 소스 코드로 최상의 등록 시간 소스를 선택할수 있습니다.  `rating` 은 다음과 같은 값을 가집니다. :
 
-* `1-99`    - Only available for bootup and testing purposes;
-* `100-199` - Functional for real use, but not desired.
-* `200-299` - A correct and usable clocksource.
-* `300-399` - A reasonably fast and accurate clocksource.
-* `400-499` - The ideal clocksource. A must-use where available;
+* `1-99`    - 부팅 및 테스트 목적으로만 사용 가능;
+* `100-199` - 실제 사용을 위한 기능이지만 바람직 하지 않음.
+* `200-299` - 정확하고 사용가능한 클럭 소스.
+* `300-399` - 빠르고 정확한 클럭 소스.
+* `400-499` -이상적인 클럭 소스. 가능한 경우 반드시 사용해야합니다.;
 
-For example, rating of the [time stamp counter](https://en.wikipedia.org/wiki/Time_Stamp_Counter) is `300`, but rating of the [high precision event timer](https://en.wikipedia.org/wiki/High_Precision_Event_Timer) is `250`. The next field is `read` - it is pointer to the function that allows it to read clocksource's cycle value; or in other words, it just returns `jiffies` variable with `cycle_t` type:
+예를 들어 [time stamp counter](https://en.wikipedia.org/wiki/Time_Stamp_Counter)의 등급은 `300`이지만 , [high precision event timer](https://en.wikipedia.org/wiki/High_Precision_Event_Timer) 의 등급은 `250`입니다. 다음 필드는 `read`입니다. - 클럭 소스의 사이클 값을 읽을 수 있는 기능에 대한 포인터로, 즉 `cycle_t` 유형의 `jiffies` 변수만 반환한다. :
 
 ```C
 static cycle_t jiffies_read(struct clocksource *cs)
@@ -205,13 +206,13 @@ static cycle_t jiffies_read(struct clocksource *cs)
 }
 ```
 
-that is just 64-bit unsigned type:
+즉 64-bit 의 양수형 타입:
 
 ```C
 typedef u64 cycle_t;
 ```
 
-The next field is the `mask` value, which ensures that subtraction between counters values from non `64 bit` counters do not need special overflow logic. In our case the mask is `0xffffffff` and it is `32` bits. This means that `jiffy` wraps around to zero after `42` seconds:
+다음 필드는  `mask` 값으로, `64 bit` 가 아닌 카운터에서 값을빼는 데 특수 오버플로 로직이 필요하지 않습니다.  이 경우의 마스크는 `0xffffffff` 이고  `32`비트 입니다. 이것은  `jiffy` 가  `42`초 후에 0으로 줄어드는 것을 의미합니다:
 
 ```python
 >>> 0xffffffff
@@ -224,13 +225,13 @@ The next field is the `mask` value, which ensures that subtraction between count
 4.3e-08
 ```
 
-The next two fields `mult` and `shift` are used to convert the clocksource's period to nanoseconds per cycle. When the kernel calls the `clocksource.read` function, this function returns a value in `machine` time units represented with `cycle_t` data type that we saw just now. To convert this return value to [nanoseconds](https://en.wikipedia.org/wiki/Nanosecond) we need these two fields: `mult` and `shift`. The `clocksource` provides the `clocksource_cyc2ns` function that will do it for us with the following expression:
+다음 두 필드인  `mult`와 `shift` 는 클럭 소스의 주기를 사이클 당 나노 초로 변환 하는데 사용됩니다.커널이  `clocksource.read` 함수를 호출하면 이함수는 `cycle_t` 데이터 형식으로 표시되는  `machine` 타입 단위의 값을 단환합니다.  이 리턴 값을  [nanoseconds](https://en.wikipedia.org/wiki/Nanosecond) 변환하려면 : `mult` 와 `shift` 두 필드가 필요합니다. `clocksource` 는  `clocksource_cyc2ns` 함수를 제공하여 다음과 같은 식으로 우리에게 도움이 됩니다:
 
 ```C
 ((u64) cycles * mult) >> shift;
 ```
 
-As we can see the `mult` field is equal:
+보시다시피 `mult`  필드는 같습니다:
 
 ```C
 NSEC_PER_JIFFY << JIFFIES_SHIFT
@@ -239,7 +240,7 @@ NSEC_PER_JIFFY << JIFFIES_SHIFT
 #define NSEC_PER_SEC    1000000000L
 ```
 
-by default, and the `shift` is
+기본적으로, `shift`는
 
 ```C
 #if HZ < 34
@@ -251,37 +252,37 @@ by default, and the `shift` is
 #endif
 ```
 
-The `jiffies` clock source uses the `NSEC_PER_JIFFY` multiplier conversion to specify the nanosecond over cycle ratio. Note that values of the  `JIFFIES_SHIFT` and `NSEC_PER_JIFFY` depend on `HZ` value. The `HZ` represents the frequency of the system timer. This macro defined in the [include/asm-generic/param.h](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/include/asm-generic/param.h) and depends on the `CONFIG_HZ` kernel configuration option. The value of `HZ` differs for each supported architecture, but for `x86` it's defined like:
+`jiffies` 클록 소스는 `NSEC_PER_JIFFY` 승수 변환을 사용하여 나노 초 초과 사이클 비율을 지정합니다.  `JIFFIES_SHIFT` 및 `NSEC_PER_JIFFY` 의 값은 `HZ` 값에 따라 달라집니다.  `HZ` 는 시스템 타이머의 주파수를 나타냅니다. 이 매크로는 [include/asm-generic/param.h](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/include/asm-generic/param.h) 에 정의 되어 있으며 `CONFIG_HZ` 커널 구성 옵션에 따라 다릅니다.  `HZ` 의 가치는 지원되는 아키텍처마다 다르지만 `x86` 의 경우 다음과 같이 정의 됩니다:
 
 ```C
 #define HZ		CONFIG_HZ
 ```
 
-Where `CONFIG_HZ` can be one of the following values:
+여기서 `CONFIG_HZ` 는 다음 값 중 하나 일 수 있습니다:
 
 ![HZ](http://i63.tinypic.com/v8d6ph.png)
 
-This means that in our case the timer interrupt frequency is `250 HZ` or occurs `250` times per second or one timer interrupt each `4ms`.
+이것은 우리의 경우에 타이머 인터럽트 주파수가 `250 HZ` 이거나 초당 `250` 번 발생하거나 각`4ms`에 하나의 타이머 인터럽트가 발생한다는 것을 의미합니다.
 
-The last field that we can see in the definition of the `clocksource_jiffies` structure is the - `max_cycles` that holds the maximum cycle value that can safely be multiplied without potentially causing an overflow.
+ `clocksource_jiffies` 구조의 정의에서 볼 수 있는 마지막 필드는 잠재적으로 오버플로를 발생시키지 않고 안전하게 곱할 수 있는 `max_cycles` 값을 보유하는 최대 사이클 값입니다.
 
-Ok, we just saw definition of the `clocksource_jiffies` structure, also we know a little about `jiffies` and `clocksource`, now it is time to get back to the implementation of the our function. In the beginning of this part we have stopped on the call of the:
+그럼,우리는  `clocksource_jiffies` 구조의 정의를 보았습니다. 또 한 `jiffies` 와 `clocksource`, 에 대해 조금 알고 있습니다. 본 파트의 시작 부분에 있어서, 우리는 다음과 같은 호출에 의해 중단됬습니다:
 
 ```C
 register_refined_jiffies(CLOCK_TICK_RATE);
 ```
 
-function from the [arch/x86/kernel/setup.c](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/arch/x86/kernel/setup.c#L842) source code file.
+ 다음 함수는 [arch/x86/kernel/setup.c](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/arch/x86/kernel/setup.c#L842) 소스 코드 파일에 있습니다.
 
-As I already wrote, the main purpose of the `register_refined_jiffies` function is to register `refined_jiffies` clocksource. We already saw the `clocksource_jiffies` structure represents standard `jiffies` clock source. Now, if you look in the [kernel/time/jiffies.c](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/kernel/time/jiffies.c) source code file, you will find yet another clock source definition:
+이미 글 쓴것 처럼 `register_refined_jiffies`함수의 주요 목적은  `refined_jiffies` 클럭 소스를 등록하는 것입니다.  우리는 이미 `clocksource_jiffies` 구조가 표준  `jiffies`클록 소스를 나타내는 것을 보았습니다. [kernel/time/jiffies.c](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/kernel/time/jiffies.c) 에서 소스코드 파일, 또 다른 클럭 소스 정의를 찾을 수 있습니다:
 
 ```C
 struct clocksource refined_jiffies;
 ```
 
-There is one difference between `refined_jiffies` and `clocksource_jiffies`: The standard `jiffies` based clock source is the lowest common denominator clock source which should function on all systems. As we already know, the `jiffies` global variable will be increased during each timer interrupt. This means the that standard `jiffies` based clock source has the same resolution as the timer interrupt frequency. From this we can understand that standard `jiffies` based clock source may suffer from inaccuracies. The `refined_jiffies` uses `CLOCK_TICK_RATE` as the base of `jiffies` shift.
+`refined_jiffies` 와`clocksource_jiffies`: 사이에는 한가지 차이점이 있습니다. 표준 `jiffies` 기반 클록 소스는 모든 시스템에서 작동해야하는 최저 공통 분모 클록 소스입니다. 우리가 이미 알고 있듯이, `jiffies` 전역 변수는 각 타이머 인터럽트 동안 증가합니다. 이는 표준 `jiffies` 기반 클록 소스가 타이머 인터럽트 주파수와 동일한 해상도를 가짐을 의미합니다.이로부터 우리는 표준 `jiffies` 기반 클럭 소스가 부정확성을 겪을 수 있음을 이해할 수 있습니다.  `refined_jiffies` 는`jiffies`시포트의 기본으로 `CLOCK_TICK_RATE` 를 사용합니다.
 
-Let's look at the implementation of this function. First of all, we can see that the `refined_jiffies` clock source based on the `clocksource_jiffies` structure:
+이 함수의 구현을 살펴봅시다. 우선, `clocksource_jiffies`구조에 기반한 `refined_jiffies` 클록 소스를 볼 수 있습니다:
 
 ```C
 int register_refined_jiffies(long cycles_per_second)
@@ -297,27 +298,27 @@ int register_refined_jiffies(long cycles_per_second)
 	...
 ```
 
-Here we can see that we update the name of the `refined_jiffies` to `refined-jiffies` and increase the rating of this structure. As you remember, the `clocksource_jiffies` has rating - `1`, so our `refined_jiffies` clocksource will have rating - `2`. This means that the `refined_jiffies` will be the best selection for clock source management code.
+여기서 우리는`refined_jiffies`의 이름을  `refined-jiffies` 로 업데이트 하고 이 구조의 등급을 높이는 것을 볼 수 있습니다. 기억 할 수 있듯이`clocksource_jiffies` 의 등급은 - `1`, 입니다.  따라서`refined_jiffies` 의 클록 소스의 등급은 - `2`입니다. 이는 `refined_jiffies` 가 클록 소스 관리 코드에 가장 적합한 선택임을 의미합니다.
 
-In the next step we need to calculate number of cycles per one tick:
+다음 단계에서는 한번의 틱당 사이클 수를 계산해야 합니다:
 
 ```C
 cycles_per_tick = (cycles_per_second + HZ/2)/HZ;
 ```
 
-Note that we have used `NSEC_PER_SEC` macro as the base of the standard `jiffies` multiplier. Here we are using the `cycles_per_second` which is the first parameter of the `register_refined_jiffies` function. We've passed the `CLOCK_TICK_RATE` macro to the `register_refined_jiffies` function. This macro is defined in the [arch/x86/include/asm/timex.h](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/arch/x86/include/asm/timex.h) header file and expands to the:
+우리는 `NSEC_PER_SEC` 매크로를 표준 `jiffies` 곱함수의 기본으로 사용했습니다. 여기서는 `register_refined_jiffies` 함수의 첫 번째 매개 변수 인`cycles_per_second` 를 사용하고 있습니다. 우리는 `CLOCK_TICK_RATE` 매크로를`register_refined_jiffies`함수에 전달했습니다. 이 매크로는[arch/x86/include/asm/timex.h](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/arch/x86/include/asm/timex.h) 헤더 파일에 정의되어 있으며 다음으로 확장됩니다:
 
 ```C
 #define CLOCK_TICK_RATE         PIT_TICK_RATE
 ```
 
-where the `PIT_TICK_RATE` macro expands to the frequency of the [Intel 8253](Programmable interval timer):
+여기서  `PIT_TICK_RATE` 매크로는  [Intel 8253](Programmable interval timer)의 주파수로 확장됩니다:
 
 ```C
 #define PIT_TICK_RATE 1193182ul
 ```
 
-After this we calculate `shift_hz` for the `register_refined_jiffies` that will store `hz << 8` or in other words frequency of the system timer. We shift left the `cycles_per_second` or frequency of the programmable interval timer on `8` in order to get extra accuracy:
+이후 `hz << 8`을 저장할 `register_refined_jiffies`에 대한   `shift_hz`또는 시스템 타이머의 빈도를 계산한다. 정확성을 높이기 위해`cycles_per_second` 또는 프로그램 가능 간격 타이머의 빈도를 `8` 로 변경하여 추가 정확도를 확보합니다:
 
 ```C
 shift_hz = (u64)cycles_per_second << 8;
@@ -325,7 +326,7 @@ shift_hz += cycles_per_tick/2;
 do_div(shift_hz, cycles_per_tick);
 ```
 
-In the next step we calculate the number of seconds per one tick by shifting left the `NSEC_PER_SEC` on `8` too as we did it with the `shift_hz` and do the same calculation as before:
+다음 단계에서는 `shift_hz`에서와 마찬가지로  `NSEC_PER_SEC` 를 `8` 로 이동하여 1개 눈금당 초를 계산하고 이전과 동일한 계산을 수행한다:
 
 ```C
 nsec_per_tick = (u64)NSEC_PER_SEC << 8;
@@ -337,24 +338,24 @@ do_div(nsec_per_tick, (u32)shift_hz);
 refined_jiffies.mult = ((u32)nsec_per_tick) << JIFFIES_SHIFT;
 ```
 
-In the end of the `register_refined_jiffies` function we register new clock source with the `__clocksource_register` function that is defined in the [include/linux/clocksource.h](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/include/linux/clocksource.h) header file and return:
+`register_refined_jiffies` 함수의 끝부분에서 우리는   [include/linux/clocksource.h](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/include/linux/clocksource.h)에 정의된 `__clocksource_register`함수에 새로운 클록소스 헤더에 를 정의한다 후 리턴한다:
 
 ```C
 __clocksource_register(&refined_jiffies);
 return 0;
 ```
 
-The clock source management code provides the API for clock source registration and selection. As we can see, clock sources are registered by calling the  `__clocksource_register` function during kernel initialization or from a kernel module. During registration, the clock source management code will choose the best clock source available in the system using the `clocksource.rating` field which we already saw when we initialized `clocksource` structure for `jiffies`.
+클록 소스 관리 코드는 클록 소스 등록 및 선택을 위한 API를 제공합니다. 보다시피, 클록 초기화는 커널 초기화 중 또는 커널 모듈에서  `__clocksource_register`함수를 호출하여 등록됩니다. 등록하는 동안 클록 소스관리 코드는 `jiffies`에 대한 `clocksource` 구조를 초기화 할 때 이미 본 `clocksource.rating` 필드를 사용하여 시스템에서 사용 가능한 최상의 클록 소스를 선택합니다.
 
-Using the jiffies
+jiffies 사용하기
 --------------------------------------------------------------------------------
 
-We just saw initialization of two `jiffies` based clock sources in the previous paragraph:
+이전 단락에서 두 개의`jiffies`기반 클록 소스의 초기화를 보았습니다:
 
-* standard `jiffies` based clock source;
-* refined  `jiffies` based clock source;
+* 표준`jiffies` 기반 클록 소스;
+* 세련된  `jiffies` 기반 클록 소스;
 
-Don't worry if you don't understand the calculations here. They look frightening at first. Soon, step by step we will learn these things. So, we just saw initialization of `jiffies` based clock sources and also we know that the Linux kernel has the global variable `jiffies` that holds the number of ticks that have occurred since the kernel started to work. Now, let's look how to use it. To use `jiffies` we just can use the `jiffies` global variable by its name or with the call of the `get_jiffies_64` function. This function defined in the [kernel/time/jiffies.c](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/kernel/time/jiffies.c) source code file and just returns full `64-bit` value of the `jiffies`:
+여기에서 계산을 이해하지 못해도 걱정할 필요가 없습니다. 처음에는 무섭게 보입니다. 곧 우리는 단계적으로 이러한 것들을 배울 것입니다. 그래서, 우리는 `jiffies` 기반의 클록 소스의 초기화를 보았고 리눅스 커널은 커널이 작동하기 시작한 이 후 발생한 틱 수를 보유한느 전역 변수 `jiffies` 를 가지고 있다는 사실을 알고 있습니다. 이제 사용법을 봅시다. `jiffies` 를 사용하기 위해 이름이나 `get_jiffies_64`함수를 호출하여  `jiffies` 전역 변수를 사용할 수 있습니다. 이 함수는 [kernel/time/jiffies.c](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/kernel/time/jiffies.c) 소스 코드 파일에 정의되어 있으며 `jiffies`의 `64-bit` 값만 리턴합니다. 
 
 ```C
 u64 get_jiffies_64(void)
@@ -371,7 +372,7 @@ u64 get_jiffies_64(void)
 EXPORT_SYMBOL(get_jiffies_64);
 ```
 
-Note that the `get_jiffies_64` function does not implemented as `jiffies_read` for example:
+`get_jiffies_64` 함수는 다음과 같이 `jiffies_read` 로 구현되지 않습니다.:
 
 ```C
 static cycle_t jiffies_read(struct clocksource *cs)
@@ -380,15 +381,15 @@ static cycle_t jiffies_read(struct clocksource *cs)
 }
 ```
 
-We can see that implementation of the `get_jiffies_64` is more complex. The reading of the `jiffies_64` variable is implemented using [seqlocks](https://en.wikipedia.org/wiki/Seqlock). Actually this is done for machines that cannot atomically read the full 64-bit values.
+ `get_jiffies_64` 의 구현이 더 복잡하다는 것을 알 수 있습니다. `jiffies_64` 의 변수의 읽기는 [seqlocks](https://en.wikipedia.org/wiki/Seqlock)를 사용하여 구현됩니다. 실제로 이것은 전체 64 비트 값을 엄청 작은 단위를 읽을 수 없는 시스템에서 수행됩니다.
 
-If we can access the `jiffies` or the `jiffies_64` variable we can convert it to `human` time units. To get one second we can use following expression:
+`jiffies` 또는 `jiffies_64` 변수에 액세스 할 수 있으면 이를 `human` 시간 단위로 변환 할 수 있습니다. 1초를 얻기 위해 다음 표현식을 사용할 수 있습니다:
 
 ```C
 jiffies / HZ
 ```
 
-So, if we know this, we can get any time units. For example:
+그래서 우리가 이것을 알고 있다면 시간 단위를 얻을 수 있습니다. 예를 들면 다음과 같습니다:
 
 ```C
 /* Thirty seconds from now */
@@ -401,18 +402,18 @@ jiffies + 120*HZ
 jiffies + HZ / 1000
 ```
 
-That's all.
+이게 답니다.
 
-Conclusion
+결론
 --------------------------------------------------------------------------------
 
-This concludes the first part covering time and time management related concepts in the Linux kernel. We first met two concepts and their initialization: `jiffies` and `clocksource`. In the next part we will continue to dive into this interesting theme, and as I already wrote in this part, we will try to understand the insides of these and other time management concepts in the Linux kernel.
+이것으로 리눅스 커널에서 시간 및 시간 관리 관련 개념을 다루는 첫 번째 부분을 마치겠습니다. 우리는 먼저 두가지 개념과 초기화를 배웠습니다: `jiffies` 와 `clocksource`입니다. 다음 부분에서 우리는 이와 같은 흥미로운 주제를 계속해서 살펴볼 것이며 이 부분에서 이미 설명한 것처럼 리눅스 커널에서 이러한 시간 관리 개념과 다른 시간 관리 개념의 내부에 대해 이해하여 볼 것입니다.
 
-If you have questions or suggestions, feel free to ping me in twitter [0xAX](https://twitter.com/0xAX), drop me [email](anotherworldofworld@gmail.com) or just create [issue](https://github.com/0xAX/linux-insides/issues/new).
+질문이나 제안사항이 있으시면 언제든지 트위터 [0xAX](https://twitter.com/0xAX),에 핑을 보내거나 [email](anotherworldofworld@gmail.com) 을 보내거나  [issue](https://github.com/0xAX/linux-insides/issues/new)를 만들어 주세요.
 
-**Please note that English is not my first language and I am really sorry for any inconvenience. If you found any mistakes please send me PR to [linux-insides](https://github.com/0xAX/linux-insides).**
+**영어는 모국어가 아니며 불편을 끼쳐 드려 죄송합니다. 실수를 발견하면 PR을  [linux-insides](https://github.com/0xAX/linux-insides)로 보내주세요.**
 
-Links
+링크
 --------------------------------------------------------------------------------
 
 * [system call](https://en.wikipedia.org/wiki/System_call)
