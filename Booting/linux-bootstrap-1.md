@@ -92,7 +92,7 @@ _start:
 
 여기서 우리는 `jmp` 명령어의 [기계어 코드](http://ref.x86asm.net/coder32.html#xE9)인 `0xe9`를 볼 수 있습니다, 그리고 목적지 주소는 `_start16bit - ( . + 2)` 입니다.
 
-우리는 또한 `rest` 섹션의 `16` 바이트를 볼 수 있습니다. 그리고 그것은 `0xfffffff0` 주소에서 시작하기 위해 컴파일 됩니다. (`src/cpu/x86/16bit/reset16.ld`):
+우리는 또한 `reset` 섹션의 `16` 바이트를 볼 수 있습니다. 그리고 그것은 `0xfffffff0` 주소에서 시작하기 위해 컴파일 됩니다. (`src/cpu/x86/16bit/reset16.ld`):
 
 ```
 SECTIONS {
@@ -144,7 +144,7 @@ nasm -f bin boot.nasm && qemu-system-x86_64 boot
 당신은 아래와 같이 보게 될것입니다:
 You will see:
 
-![Simple bootloader which prints only `!`](http://oi60.tinypic.com/2qbwup0.jpg)
+![Simple bootloader which prints only `!`](images/simple_bootloader.png)
 
 이 예제에서, 우리는 코드가 `16-bit` 리얼 모드에서 실행되며, 메모리의 `0x7c00`에서 시작한다는 것을 알 수 있습니다. 시작하고 난 후, 코드는 단순히 `!`를 출력하는 [0x10](http://wwww.ctyme.com/intr/rb-0106.htm) 인터럽트를 호출합니다; 나머지 `510` 바이트를 0으로 채우고, 매직 바이트 `0xaa`와 `0x55`로 끝납니다.
 
@@ -219,7 +219,7 @@ hdr:
     boot_flag:   .word 0xAA55
 ```
 
-부트로더는 반드시 이 것과 헤더의 나머지 부분(Linux 부트 프로토콜에서 오직 `wrtie` 타입으로 표시된 것만, [이 예시와 같이](https://github.com/torvalds/linux/blob/v4.16/Documentation/x86/boot.txt#L354)) 을 커맨드 라인으로부터 받았거나 부팅 중에 계산된 값으로 채워야 합니다. (지금은 커널 구성 헤더의 모든 필드에 대한 모든 설명을 하지는 않을 것입니다, 하지만 우리는 커널이 이것을 어떻게 사용하는지에 대해 논의할 때 할 것입니다; 모든 필드에 대한 설명은 [부트 프로토콜](https://github.com/torvalds/linux/blob/v4.16/Documentation/x86/boot.txt#L156)에서 찾을 수 있습니다.)
+부트로더는 반드시 이 것과 헤더의 나머지 부분(Linux 부트 프로토콜에서 오직 `write` 타입으로 표시된 것만, [이 예시와 같이](https://github.com/torvalds/linux/blob/v4.16/Documentation/x86/boot.txt#L354)) 을 커맨드 라인으로부터 받았거나 부팅 중에 계산된 값으로 채워야 합니다. (지금은 커널 구성 헤더의 모든 필드에 대한 모든 설명을 하지는 않을 것입니다, 하지만 우리는 커널이 이것을 어떻게 사용하는지에 대해 논의할 때 할 것입니다; 모든 필드에 대한 설명은 [부트 프로토콜](https://github.com/torvalds/linux/blob/v4.16/Documentation/x86/boot.txt#L156)에서 찾을 수 있습니다.)
 
 
 커널 부트 프로토콜에서 볼 수 있듯이, 커널이 로딩된 후 메모리는 이렇게 맵핑 될 것입니다.
@@ -259,8 +259,7 @@ X + sizeof(KernelBootSector) + 1
 여기서 X는 로드되고 있는 커널 부트 섹터의 주소입니다. 제 경우에는 메모리 덤프에서 볼 수 있듯이 `X`는 `0x10000`입니다.
 
 
-![커널 첫 번째 주소](http://oi57.tinypic.com/16bkco2.jpg)
-![kernel first address](http://oi57.tinypic.com/16bkco2.jpg)
+![커널 첫 번째 주소](images/kernel_first_address.png)
 
 이제 부트로더는 리눅스 커널을 메모리에 로드했습니다, 헤더 필드들을 채웠고, 그러고 나서는 해당하는 메모리 주소로 점프했습니다. 우리는 이제 바로 커널 구성 코드로 이동 할 수 있습니다.
 
@@ -278,7 +277,7 @@ qemu-system-x86_64 vmlinuz-3.18-generic
 
 이런걸 볼 수 있습니다:
 
-![Try vmlinuz in qemu](http://oi60.tinypic.com/r02xkz.jpg)
+![Try vmlinuz in qemu](images/try_vmlinuz_in_qemu.png)
 
 사실, `header.S` 파일은 매직 넘버[MZ](https://en.wikipedia.org/wiki/DOS_MZ_executable) (위에 사진을 보세요) 로 시작합니다. 에러 메세지는 그걸 보여줍니다. [PE](https://en.wikipedia.org/wiki/Portable_Executable) 헤더:
 
@@ -420,7 +419,7 @@ _start:
 여기서 우리는 `dx`(부트로더에 의해 주어진 `sp`의 값을 가지고 있음.)를 4바이트로 정렬하고, 0인지 아닌지를 확인합니다. 만약 0이라면, `0xfffc`(64KB의 최대 세그먼트 크기 이전의 4바이트로 정렬된 주소)를 `dx`에 넣습니다. 만약 0이 아니라면, 우리는 부트로더에 의해 주어진 `sp`의 값을 계속 사용합니다. (제 경우에는 0xf7f4 였습니다). 이 이후에, `ax`의 값을 `ss`에 넣어 올바른 세그먼트 주소인 `0x1000`를 저장하고, 올바른 `sp`를 구성합니다. 
 우리는 이제 올바른 스택을 가지게 되었습니다:
 
-![stack](http://oi58.tinypic.com/16iwcis.jpg)
+![stack](images/stack1.png)
 
 * 두 번째 상황인 (`ss` != `ds`) 입니다. 첫번째로, `dx`에 [_end](https://github.com/torvalds/linux/blob/v4.16/arch/x86/boot/setup.ld)(구성 코드의 끝 주소)를 넣습니다. 그리고는 `testb` 명령을 사용하여 `loadflags` 헤더 필드를 확인해 힙을 사용할 수 있는지 없는지 확인합니다. [loadflags](https://github.com/torvalds/linux/blob/v4.16/arch/x86/boot/header.S#L320)는 비트마스크 헤더입니다. 정의부는 아래와 같습니다.
 
@@ -455,11 +454,11 @@ Field name: loadflags
 
 만약 `CAN_USE_HEAP` 비트가 설정되어 있다면, `dx` (`_end`를 가리키고 있음)에 `heap_end_ptr`을 넣게 되고, 여기에 `STACK_SIZE`(최소 스택 사이즈, `1024` 바이트)를 더하게 됩니다. 만약 `dx`가 자리올림 되지 않을 경우 (자리올림 되지 않을 것입니다. `dx = _end + 1024`), 라벨 `2`로 점프합니다 (이전의 경우와 같습니다). 그리고 올바른 스택을 만듭니다.
 
-![stack](http://oi62.tinypic.com/dr7b5w.jpg)
+![stack](images/stack2.png)
 
 * `CAN_USE_HEAP`이 설정되어 있지 않을때에는, 그냥 `_end`에서 `_end + STACK_SIZE` 까지의 최소 스택을 사용합니다:
 
-![minimal stack](http://oi60.tinypic.com/28w051y.jpg)
+![minimal stack](images/minimal_stack.png)
 
 
 BSS 구성
@@ -488,7 +487,7 @@ BSS 섹션은 초기화 되지 않은 정적 할당된 데이터를 저장하는
 
 첫번째로, [__bss_start](https://github.com/torvalds/linux/blob/v4.16/arch/x86/boot/setup.ld)의 주소는 `di`에 복사됩니다. 그 다음으로는 `_end + 3`의 주소( +3 - 4바이트로 정렬함)가 `cx`에 복사됩니다. `eax` 레지스터는 초기화 됩니다(`xor` 명령을 사용함). 그리고 bss 섹션 크기(`cx` - `di`)를 계산하여 `cx`에 넣습니다. 그러고 나서는 `cx`가 4로 나누어집니다(`WORD`의 크기), 그리고 `stosl` 명령이 반복되어 사용됩니다. 이 명령은 `eax`(0)의 값을 `di`가 가리키고 있는 주소에 저장합니다. 자동적으로 `di`는 4씩 증가하게 됩니다. (`cx`가 0이 될 때까지 반복함). 이 코드의 최종적인 효과는 `__bss_start` 부터 `_end` 까지 메모리의 모든 워드들에 0이 쓰여지게 되는 것입니다.
 
-![bss](http://oi59.tinypic.com/29m2eyr.jpg)
+![bss](images/bss.png)
 
 main으로 점프
 --------------------------------------------------------------------------------

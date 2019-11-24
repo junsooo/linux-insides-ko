@@ -3,7 +3,7 @@ linux-insides 한국어 번역
 
 리눅스 커널과 그 내부 구조에 대해 작성하는 작업을 진행중입니다.
 
-**간단한 목표** - 리눅스 커널의 내부 구조에 대한 얕은 지식을 공유하고, 리눅스 커널의 내부 구조나 다른 로우 레벨 주제에 대해 관심있는 사람들을 돕는 것입니다. [여기](https://github.com/junsooo/linux-insides-ko/blob/master/SUMMARY.md)에서 자유롭게 책을 읽기 시작하세요.
+**간단한 목표** - 리눅스 커널의 내부 구조에 대한 얕은 지식을 공유하고, 리눅스 커널의 내부 구조나 다른 로우 레벨 주제에 대해 관심있는 사람들을 돕는 것입니다. [여기](SUMMARY.md)에서 자유롭게 책을 읽기 시작하세요.
 
 **질문/제안(내용 관련)**: 질문이나 제안할 것이 있으면 언제든 트위터 [@0xAX](https://twitter.com/0xAX)를 핑(ping)하거나 [이슈](https://github.com/0xAX/linux-insides/issues/new)를 추가하세요. 아니면 원저자에게 간단히 [이메일](mailto:anotherworldofworld@gmail.com)을 주세요.
 
