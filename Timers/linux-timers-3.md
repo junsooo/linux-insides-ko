@@ -1,36 +1,37 @@
-Timers and time management in the Linux kernel. Part 3.
+Linux 커널의 타이머와 시간 관리. part 3.
 ================================================================================
 
-The tick broadcast framework and dyntick
+tick broadcast framework 와 dyntick
 --------------------------------------------------------------------------------
 
-This is third part of the [chapter](https://0xax.gitbooks.io/linux-insides/content/Timers/index.html) which describes timers and time management related stuff in the Linux kernel and we stopped on the `clocksource` framework in the previous [part](https://0xax.gitbooks.io/linux-insides/content/Timers/linux-timers-2.html). We have started to consider this framework because it is closely related to the special counters which are provided by the Linux kernel. One of these counters which we already saw in the first [part](https://0xax.gitbooks.io/linux-insides/content/Timers/linux-timers-1.html) of this chapter is - `jiffies`. As I already wrote in the first part of this chapter, we will consider time management related stuff step by step during the Linux kernel initialization. Previous step was call of the:
+
+이것은 리눅스 커널에서 타이머와 시간 관리 관련 내용을 설명하는 [챕터](https://junsoolee.gitbook.io/linux-insides-ko/summary/timers)의 세 번째 파트이며 이전 [파트](https://junsoolee.gitbook.io/linux-insides-ko/summary/timers/linux-timers-3)에서 `clocksource` 프레임 워크에서 멈췄습니다. 이 프레임 워크는 Linux 커널에서 제공하는 특수 카운터와 밀접하게 관련되어 있기 때문에 다루기 시작했습니다. 이 챕터의 첫 파트에서 보았던 카운터 중 하나는 `jiffies` 입니다. 첫 파트에서 썼듯이, 우리는 리눅스 커널 초기화 과정에서 시간 관리와 관련된 것을 단계별로 고려할 것입니다. 이전 단계는 다음을 호출하는 것이었습니다 :
 
 ```C
 register_refined_jiffies(CLOCK_TICK_RATE);
 ```
 
-function which defined in the [kernel/time/jiffies.c](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/kernel/time/jiffies.c) source code file and executes initialization of the `refined_jiffies` clock source for us. Recall that this function is called from the `setup_arch` function that defined in the [https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/arch/x86/kernel/setup.c](arch/x86/kernel/setup.c) source code and executes architecture-specific ([x86_64](https://en.wikipedia.org/wiki/X86-64) in our case) initialization. Look on the implementation of the `setup_arch` and you will note that the call of the `register_refined_jiffies` is the last step before the `setup_arch` function will finish its work.
+이 함수는 [kernel/time/jiffies.c](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/kernel/time/jiffies.c) 소스 코드 파일에 정의되어 있고 우리를 위해`refined_jiffies` 클럭 소스의 초기화를 실행합니다. 이 함수는 [https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/arch/x86/kernel/setup.c](arch/x86/kernel/setup.c) 소스 코드에 정의 된 `setup_arch` 함수에서 호출되며 아키텍처 별 (여기서는 [x86_64](https://en.wikipedia.org/wiki/X86-64)) 초기화를 수행합니다. `setup_arch`의 구현을 살펴보면 `register_refined_jiffies` 의 호출이 `setup_arch` 함수가 작업을 완료하기 전의 마지막 단계임을 알 수 있습니다.
 
-There are many different `x86_64` specific things already configured after the end of the `setup_arch` execution. For example some early [interrupt](https://en.wikipedia.org/wiki/Interrupt) handlers already able to handle interrupts, memory space reserved for the [initrd](https://en.wikipedia.org/wiki/Initrd), [DMI](https://en.wikipedia.org/wiki/Desktop_Management_Interface) scanned, the Linux kernel log buffer is already set and this means that the [printk](https://en.wikipedia.org/wiki/Printk) function is able to work, [e820](https://en.wikipedia.org/wiki/E820) parsed and the Linux kernel already knows about available memory and and many many other architecture specific things (if you are interesting, you can read more about the `setup_arch` function and Linux kernel initialization process in the second [chapter](https://0xax.gitbooks.io/linux-insides/content/Initialization/index.html) of this book).
+`setup_arch` 실행이 끝난 후에 이미 설정된 `x86_64` 특성의 많은 것들이 있습니다. 예를 들어 이미 인터럽트를 처리 할 수 ​​있는 일부 초기 [interrupt](https://en.wikipedia.org/wiki/Interrupt) 핸들러, [initrd](https://en.wikipedia.org/wiki/Initrd)를 위해 예약 된 메모리 공간, 스캔된 [DMI](https://en.wikipedia.org/wiki/Desktop_Management_Interface), Linux 커널 로그 버퍼가 이미 설정되어 있습니다. 이는 [printk](https://en.wikipedia.org/wiki/Printk) 함수가 작동 할 수 있음을, [e820](https://en.wikipedia.org/wiki/E820)이 파싱되고 리눅스 커널은 이미 사용 가능한 메모리와 다른 많은 아키텍처 특성의 것들에 대해 알고있음을 의미합니다.(관심이 있다면,이 책의 두 번째 챕터에서 `setup_arch` 함수와 리눅스 커널 초기화 프로세스에 대해 더 많이 읽을 수 있습니다).
 
-Now, the `setup_arch` finished its work and we can back to the generic Linux kernel code. Recall that the `setup_arch` function was called from the `start_kernel` function which is defined in the [init/main.c](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/init/main.c) source code file. So, we shall return to this function. You can see that there are many different function are called right after `setup_arch` function inside of the `start_kernel` function, but since our chapter is devoted to timers and time management related stuff, we will skip all code which is not related to this topic. The first function which is related to the time management in the Linux kernel is:
+이제 `setup_arch`는 작업을 마치고 일반적인 리눅스 커널 코드로 돌아갈 수 있습니다. `setup_arch` 함수는 [init/main.c](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/init/main.c) 소스 코드 파일에 정의 된 `start_kernel` 함수에서 호출되었습니다. 따라서 이 함수로 돌아갑니다. 여러분은 `start_kernel` 함수 안에서 `setup_arch` 함수 다음에 다른 많은 함수가 호출되는 것을 볼 수 있습니다. 그러나 우리의 챕터는 타이머와 시간 관리에 관련있는 것들에 대한 내용이기 때문에 우리는 이 주제와 관련이 없는 모든 코드는 건너 뜁니다. Linux 커널에서 시간 관리와 관련된 첫 번째 함수는 다음과 같습니다. :
 
 ```C
 tick_init();
 ```
 
-in the `start_kernel`. The `tick_init` function defined in the [kernel/time/tick-common.c](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/kernel/time/tick-common.c) source code file and does two things:
+이 함수는 `start_kernel`에 있습니다. [kernel/time/tick-common.c](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/kernel/time/tick-common.c) 소스 코드 파일에 정의 된 `tick_init` 함수는 다음 두 가지를 수행합니다. :
 
 * Initialization of `tick broadcast` framework related data structures;
 * Initialization of `full` tickless mode related data structures.
 
-We didn't see anything related to the `tick broadcast` framework in this book and didn't know anything about tickless mode in the Linux kernel. So, the main point of this part is to look on these concepts and to know what are they.
+우리는 이 책에서  `tick broadcast` 프레임 워크와 관련된 것을 보지 못했고, Linux 커널의 thickless 모드에 대해서는 전혀 모르는 상태입니다. 따라서 이 파트의 요점은 이러한 개념을 살펴보고 이들이 무엇인지 아는 것입니다.
 
-The idle process
+Idle process
 --------------------------------------------------------------------------------
 
-First of all, let's look on the implementation of the `tick_init` function. As I already wrote, this function defined in the [kernel/time/tick-common.c](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/kernel/time/tick-common.c) source code file and consists from the two calls of following functions:
+우선, `tick_init` 함수의 구현을 살펴 봅시다. 이미 작성한 것처럼이 함수는 [kernel/time/tick-common.c](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/kernel/time/tick-common.c) 소스 코드 파일에 정의되어 있으며, 다음 두 함수의 호출로 구성됩니다. :
 
 ```C
 void __init tick_init(void)
@@ -40,11 +41,11 @@ void __init tick_init(void)
 }
 ```
 
-As you can understand from the paragraph's title, we are interesting only in the `tick_broadcast_init` function for now. This function defined in the [kernel/time/tick-broadcast.c](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/kernel/time/tick-broadcast.c) source code file and executes initialization of the `tick broadcast` framework related data structures. Before we will look on the implementation of the `tick_broadcast_init` function and will try to understand what does this function do, we need to know about `tick broadcast` framework.
+소제목에서 알 수 있듯이 지금은 `tick_broadcast_init` 함수에만 관심을 갖습니다. 이 함수는 [kernel/time/tick-broadcast.c](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/kernel/time/tick-broadcast.c) 소스 코드 파일에 정의되어 있으며, 데이터 구조체와 관련된 `tick broadcast` 프레임 워크의 초기화를 실행합니다. `tick_broadcast_init` 함수의 구현을 살펴보고 이 함수가 하는 일을 이해하기 전에 `tick broadcast` 프레임 워크에 대해 알아야합니다.
 
-Main point of a central processor is to execute programs. But sometimes a processor may be in a special state when it is not being used by any program. This special state is called - [idle](https://en.wikipedia.org/wiki/Idle_%28CPU%29). When the processor has no anything to execute, the Linux kernel launches `idle` task. We already saw a little about this in the last part of the [Linux kernel initialization process](https://0xax.gitbooks.io/linux-insides/content/Initialization/linux-initialization-10.html). When the Linux kernel will finish all initialization processes in the `start_kernel` function from the [init/main.c](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/init/main.c) source code file, it will call the `rest_init` function from the same source code file. Main point of this function is to launch kernel `init` thread and the `kthreadd` thread, to call the `schedule` function to start task scheduling and to go to sleep by calling the `cpu_idle_loop` function that defined in the [kernel/sched/idle.c](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/kernel/sched/idle.c) source code file.
+중앙 프로세서의 중요한 포인트는 프로그램을 실행하는 것입니다. 그러나 가끔 프로세서가 프로그램에서 사용되지 않을 때에는 특수한 상태에 있을 수 있습니다. 이 특수한 상태를 [idle](https://en.wikipedia.org/wiki/Idle_%28CPU%29)라고합니다. 프로세서에 실행할 것이 없으면 Linux 커널은 `idle` 작업을 시작합니다. 우리는 이미 [Linux 커널 초기화 과정](https://0xax.gitbooks.io/linux-insides/content/Initialization/linux-initialization-10.html)의 마지막 파트에서 이것에 대해 조금 살펴보았습니다. 리눅스 커널이 [init/main.c](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/init/main.c) 소스 코드 파일에서 `start_kernel` 함수의 모든 초기화 프로세스를 마치면 동일한 소스 코드 파일에서 `rest_init` 함수를 호출합니다. 이 함수의 중요한 포인트는 커널 `init` 스레드와 `kthreadd` 스레드를 시작한다는 것,`schedule` 함수를 호출하여 작업 스케줄링을 시작한다는 것, [kernel/sched/idle.c](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/kernel/sched/idle.c) 소스 코드 파일에 정의 된 `cpu_idle_loop`를 호출함으로써 sleep 상태로 간다는 것입니다.
 
-The `cpu_idle_loop` function represents infinite loop which checks the need for rescheduling on each iteration. After the scheduler finds something to execute, the `idle` process will finish its work and the control will be moved to a new runnable task with the call of the `schedule_preempt_disabled` function:
+`cpu_idle_loop` 함수는 무한 루프를 나타내며 각 루프에서 스케줄을 다시 짤 필요가 있는지 확인합니다. 스케줄러가 실행할 항목을 찾은 후 `idle` 프로세스가 작업을 완료하면 `schedule_preempt_disabled` 함수를 호출하여 제어가 새로 실행 가능한 작업으로 이동합니다. :
 
 ```C
 static void cpu_idle_loop(void)
@@ -54,7 +55,7 @@ static void cpu_idle_loop(void)
 		...
 		...
 		...
-	    /* the main idle function */
+	    */ the main idle function /*
 		cpuidle_idle_call();
 	}
 	...
@@ -64,19 +65,20 @@ static void cpu_idle_loop(void)
 }
 ```
 
-Of course, we will not consider full implementation of the `cpu_idle_loop` function and details of the `idle` state in this part, because it is not related to our topic. But there is one interesting moment for us. We know that the processor can execute only one task in one time. How does the Linux kernel decide to reschedule and stop `idle` process if the processor executes infinite loop in the `cpu_idle_loop`? The answer is system timer interrupts. When an interrupt occurs, the processor stops the `idle` thread and transfers control to an interrupt handler. After the system timer interrupt handler will be handled, the `need_resched` will return true and the Linux kernel will stop `idle` process and will transfer control to the current runnable task. But handling of the system timer interrupts is not effective for [power management](https://en.wikipedia.org/wiki/Power_management), because if a processor is in `idle` state,  there is little point in sending it a system timer interrupt.
+물론 지금 파트에서 `cpu_idle_loop` 함수의 전체 구현과 `idle` 상태의 세부 사항을 살펴보지는 않을 것입니다. 이는 주제와 관련이 없기 때문입니다. 하지만 한 흥미로운 부분이 있습니다. 우리는 프로세서가 한 번에 하나의 작업만 수행할 수 있다는 것을 알고 있습니다. 프로세서가 `cpu_idle_loop`에서 무한 루프를 실행하는 경우, Linux 커널은 어떻게 일정을 변경하고 `idle` 프로세스를 중지하기로 결정할까요? 답은 시스템 타이머 인터럽트입니다. 인터럽트가 발생하면 프로세서는 `idle` 스레드를 중지하고 제어를 인터럽트 처리기로 전송합니다. 시스템 타이머 인터럽트 핸들러가 처리되면 `need_resched`는 true를 반환하고, 리눅스 커널은`idle` 프로세스를 중단하고 현재 실행 가능한 작업으로 제어권을 넘깁니다. 그러나 시스템 타이머 인터럽트를 처리하는 것은 [전원 관리](https://en.wikipedia.org/wiki/Power_management)에 효과적이지 않습니다. 프로세서가 `idle` 상태인 경우 시스템 타이머 인터럽트를 보내는 데에 작은 문제가 있기 때문입니다.
 
-By default, there is the `CONFIG_HZ_PERIODIC` kernel configuration option which is enabled in the Linux kernel and tells to handle each interrupt of the system timer. To solve this problem, the Linux kernel provides two additional ways of managing scheduling-clock interrupts:
+기본적으로 리눅스 커널에서 사용 가능한 `CONFIG_HZ_PERIODIC` 커널 설정 옵션이 있으며, 이는 시스템 타이머의 각 인터럽트를 처리하도록 지시합니다. 이 문제를 해결하기 위해 Linux 커널은 스케줄링 클럭 인터럽트를 관리하는 두 가지 추가 방법을 제공합니다.
 
-The first is to omit scheduling-clock ticks on idle processors. To enable this behaviour in the Linux kernel, we need to enable the `CONFIG_NO_HZ_IDLE` kernel configuration option. This option allows Linux kernel to avoid sending timer interrupts to idle processors. In this case periodic timer interrupts will be replaced with on-demand interrupts. This mode is called - `dyntick-idle` mode. But if the kernel does not handle interrupts of a system timer, how can the kernel decide if the system has nothing to do?
+첫 번째는 idle 프로세서에서 스케줄링 클럭 틱을 생략하는 것입니다. Linux 커널에서 이 동작을 활성화하려면 `CONFIG_NO_HZ_IDLE` 커널 설정 옵션을 활성화해야합니다. 이 옵션을 사용하면 Linux 커널이 idle 프로세서로 타이머 인터럽트를 보내지 않아도됩니다. 이 경우 주기적인 타이머 인터럽트에서 온디맨드 인터럽트로 대체됩니다. 이 모드를 `dyntick-idle`모드라고 합니다. 그러나 커널이 시스템 타이머의 인터럽트를 처리하지 않으면, 시스템이 수행 할 작업이 없는지 어떻게 결정할 수 있을까요?
 
-Whenever the idle task is selected to run, the periodic tick is disabled with the call of the `tick_nohz_idle_enter` function that defined in the [kernel/time/tick-sched.c](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/kernel/time/tich-sched.c) source code file and enabled with the call of the `tick_nohz_idle_exit` function. There is special concept in the Linux kernel which is called - `clock event devices` that are used to schedule the next interrupt. This concept provides API for devices which can deliver interrupts at a specific time in the future and represented by the `clock_event_device` structure in the Linux kernel. We will not dive into implementation of the `clock_event_device` structure now. We will see it in the next part of this chapter. But there is one interesting moment for us right now.
+idle 작업이 실행되도록 선택 될 때마다 [kernel/time/tick-sched.c](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/kernel/time/tich-sched.c)] 소스 코드 파일에 정의 된 `tick_nohz_idle_enter` 함수의 호출로 주기적 틱이 비활성화/활성화됩니다. Linux 커널에는 다음 인터럽트를 예약하는 데 사용되는 `클럭 이벤트 장치`라는 특별한 개념이 있습니다. 이 개념은 미래의 특정 시간에 인터럽트를 전달할 수 았으며 Linux 커널의 `clock_event_device` 구조체로 표시되는 장치에 대한 API를 제공합니다. 지금 `clock_event_device` 구조체의 구현으로 뛰어 들지는 않고, 이 챕터의 다음 파트에서 볼 것입니다. 하지만 지금 우리에게 하나의 흥미로운 부분이 있습니다.
 
-The second way is to omit scheduling-clock ticks on processors that are either in `idle` state or that have only one runnable task or in other words busy processor. We can enable this feature with the `CONFIG_NO_HZ_FULL` kernel configuration option and it allows to reduce the number of timer interrupts significantly.
+두 번째 방법은 프로세서가 `idle`상태이거나, 실행 가능한 작업이 하나만 있거나, 다른 말로 프로세서가 바쁜 프로세서일때, 스케줄링 클럭 틱을 생략하는 것입니다. `CONFIG_NO_HZ_FULL` 커널 설정 옵션으로 이 기능을 활성화 할 수 있으며 타이머 인터럽트 수를 크게 줄일 수 있습니다.
 
-Besides the `cpu_idle_loop`, idle processor can be in a sleeping state. The Linux kernel provides special `cpuidle` framework. Main point of this framework is to put an idle processor to sleeping states. The name of the set of these states is - `C-states`. But how does a processor will be woken if local timer is disabled? The linux kernel provides `tick broadcast` framework for this. The main point of this framework is assign a timer which is not affected by the `C-states`. This timer will wake a sleeping processor.
+idle 프로세서는 `cpu_idle_loop` 외에도 절전 상태 일 수 있습니다. 리눅스 커널은 특별한 `cpuidle` 프레임 워크를 제공합니다. 이 프레임 워크의 중요한 포인트는 idle 프로세서를 대기 상태로 만드는 것입니다. 이 상태들 세트의 이름은 `C-states`입니다. 로컬 타이머가 비활성화되어 있다면 프로세서가 어떻게 깨어날까요? 리눅스 커널은 이를 위해 `tick broadcast` 프레임 워크를 제공합니다. 이 프레임 워크의 핵심은 `C-states`의 영향을 받지 않는 타이머를 할당하는 것입니다. 이 타이머는 슬립상태의 프로세서를 깨울 것입니다.
 
-Now, after some theory we can return to the implementation of our function. Let's recall that the `tick_init` function just calls two following functions:
+이제 몇 가지 이론이 끝나면 함수 구현으로 돌아갈 수 있습니다. `tick_init` 함수는 다음 두 함수를 호출한다는 것을 떠올려봅시다. :
+
 
 ```C
 void __init tick_init(void)
@@ -86,7 +88,7 @@ void __init tick_init(void)
 }
 ```
 
-Let's consider the first function. The first `tick_broadcast_init` function defined in the [kernel/time/tick-broadcast.c](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/kernel/time/tick-broadcast.c) source code file and executes initialization of the `tick broadcast` framework related data structures. Let's look on the implementation of the `tick_broadcast_init` function:
+첫 번째 함수를 알아 봅시다. [kernel/time/tick-broadcast.c](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/kernel/time/tick-broadcast.c) 소스 코드 파일에 정의 된 첫 번째 `tick_broadcast_init` 함수는 `tick broadcast` '프레임 워크 관련 데이터 구조체의 초기화를 실행합니다. `tick_broadcast_init` 함수의 구현을 살펴 봅시다. :
 
 ```C
 void __init tick_broadcast_init(void)
@@ -102,7 +104,7 @@ void __init tick_broadcast_init(void)
 }
 ```
 
-As we can see, the `tick_broadcast_init` function allocates different [cpumasks](https://0xax.gitbooks.io/linux-insides/content/Concepts/linux-cpu-2.html) with the help of the `zalloc_cpumask_var` function. The `zalloc_cpumask_var` function defined in the [lib/cpumask.c](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/lib/cpumask.c) source code file and expands to the call of the following function:
+보다시피 `tick_broadcast_init` 함수는 `zalloc_cpumask_var` 함수의 도움으로 서로 다른 [cpumasks](https://junsoolee.gitbook.io/linux-insides-ko/summary/concepts/linux-cpu-2)를 할당합니다.[lib/cpumask.c](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/lib/cpumask.c) 소스 코드 파일에 정의 된 `zalloc_cpumask_var` 함수는 다음 함수의 호출로 확장됩니다. :
 
 ```C
 bool zalloc_cpumask_var(cpumask_var_t *mask, gfp_t flags)
@@ -111,44 +113,44 @@ bool zalloc_cpumask_var(cpumask_var_t *mask, gfp_t flags)
 }
 ```
 
-Ultimately, the memory space will be allocated for the given `cpumask` with the certain flags with the help of the `kmalloc_node` function:
+궁극적으로 메모리 공간은 `kmalloc_node` 함수의 도움으로 특정 플래그와 함께 주어진 `cpumask`에 할당됩니다 :
 
 ```C
 *mask = kmalloc_node(cpumask_size(), flags, node);
 ```
 
-Now let's look on the `cpumasks` that will be initialized in the `tick_broadcast_init` function. As we can see, the `tick_broadcast_init` function will initialize six `cpumasks`, and moreover, initialization of the last three `cpumasks` will be depended on the `CONFIG_TICK_ONESHOT` kernel configuration option.
+이제 `tick_broadcast_init` 함수에서 초기화 될 `cpumasks`를 살펴 봅시다. 보다시피 `tick_broadcast_init` 함수는 6 개의 `cpumasks`를 초기화 할 것이며, 마지막 3개의 `cpumasks`의 초기화는 `CONFIG_TICK_ONESHOT` 커널 설정 옵션에 의존합니다.
 
-The first three `cpumasks` are:
+처음 세 개의 `cpumasks`는 다음과 같습니다. :
 
-* `tick_broadcast_mask` - the bitmap which represents list of processors that are in a sleeping mode;
-* `tick_broadcast_on` - the bitmap that stores numbers of processors which are in a periodic broadcast state;
-* `tmpmask` - this bitmap for temporary usage.
+* `tick_broadcast_mask` - sleep 모드에 있는 프로세서 목록을 나타내는 비트 맵;
+* `tick_broadcast_on` - 주기적인 브로드 캐스트 상태에 있는 프로세서 수를 저장하는 비트 맵;
+* `tmpmask` - 임시 사용을 위한 비트 맵.
 
-As we already know, the next three `cpumasks` depends on the `CONFIG_TICK_ONESHOT` kernel configuration option. Actually each clock event devices can be in one of two modes:
+우리가 이미 알고 있듯이, 다음 3개의 `cpumasks`는 `CONFIG_TICK_ONESHOT` 커널 설정 옵션에 의존합니다. 실제로 각 clock 이벤트 장치는 다음 두 가지 모드 중 하나 일 것입니다. :
 
-* `periodic` - clock events devices that support periodic events;
-* `oneshot`  - clock events devices that capable of issuing events that happen only once.
+* `periodic` - 주기적인 이벤트를 발생시키는 clock 이벤트 장치;
+* `oneshot`  - 한 번만 발생하는 이벤트를 발생시키는 clock 이벤트 장치.
 
-The linux kernel defines two mask for such clock events devices in the [include/linux/clockchips.h](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/include/linux/clockchips.h) header file:
+리눅스 커널은 [include/linux/clockchips.h](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/include/linux/clockchips.h) 헤더 파일에서 이러한 클럭 이벤트 장치에 대한 두 개의 마스크를 정의합니다. :
 
 ```C
 #define CLOCK_EVT_FEAT_PERIODIC        0x000001
 #define CLOCK_EVT_FEAT_ONESHOT         0x000002
 ```
 
-So, the last three `cpumasks` are:
+그리고 마지막 세 `cpumasks` 는:
 
-* `tick_broadcast_oneshot_mask` - stores numbers of processors that must be notified;
-* `tick_broadcast_pending_mask` - stores numbers of processors that pending broadcast;
-* `tick_broadcast_force_mask`   - stores numbers of processors with enforced broadcast.
+* `tick_broadcast_oneshot_mask` - 알려져야하는 프로세서 수를 저장합니다.
+* `tick_broadcast_pending_mask `- 방송 대기중인 프로세서의 수를 저장합니다.
+* `tick_broadcast_force_mask` - 강제 브로드 캐스트 된 프로세서 수를 저장합니다.
 
-We have initialized six `cpumasks` in the `tick broadcast` framework, and now we can proceed to implementation of this framework.
+우리는 `tick broadcast` 프레임워크에서 6 개의 `cpumasks`를 초기화했으며, 이제 이 프레임 워크의 구현을 진행할 수 있습니다.
 
-The `tick broadcast` framework
+`tick broadcast` 프레임워크
 --------------------------------------------------------------------------------
 
-Hardware may provide some clock source devices. When a processor sleeps and its local timer stopped, there must be additional clock source device that will handle awakening of a processor. The Linux kernel uses these `special` clock source devices which can raise an interrupt at a specified time. We already know that such timers called `clock events` devices in the Linux kernel. Besides `clock events` devices, each processor in the system has its own local timer which is programmed to issue interrupt at the time of the next deferred task. Also these timers can be programmed to do a periodical job, like updating `jiffies` and etc. These timers represented by the `tick_device` structure in the Linux kernel. This structure defined in the [kernel/time/tick-sched.h](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/kernel/time/tick-sched.h) header file and looks:
+하드웨어는 일부 clock 소스 장치를 제공 할 수 있습니다. 프로세서가 sleep 상태이고 로컬 타이머가 중지 된 경우 프로세서를 깨울 추가 clock 소스 장치가 있어야합니다. 리눅스 커널은 이 특별한 clock 소스 장치를 사용하여 지정된 시간에 인터럽트를 발생시킬 수 있습니다. 우리는 이미 리눅스 커널에서 `clock 이벤트` 장치라는 타이머를 알고 있습니다. `clock 이벤트` 장치 외에도 시스템의 각 프로세서에는 자체 지연 타이머가 있어 다음 지연 된 작업 시간에 인터럽트를 발생시키도록 프로그래밍 되어 있습니다. 또한이 타이머는 `jiffies` 등의 업데이트와 같은 주기적 작업을 수행하도록 프로그래밍 할 수 있습니다. 이 타이머는 Linux 커널에서 `tick_device` 구조체로 표시됩니다. 이 구조체는 [kernel/time/tick-sched.h](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/kernel/time/tick-sched.h) 헤더 파일에 정의되어 있으며 다음과 같습니다. :
 
 ```C
 struct tick_device {
@@ -157,9 +159,9 @@ struct tick_device {
 };
 ```
 
-Note, that the `tick_device` structure contains two fields. The first field - `evtdev` represents pointer to the `clock_event_device` structure that defined in the [include/linux/clockchips.h](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/include/linux/clockchips.h) header file and represents descriptor of a clock event device. A `clock event` device allows to register an event that will happen in the future. As I already wrote, we will not consider `clock_event_device` structure and related API in this part, but will see it in the next part.
+`tick_device` 구조체에는 두 개의 필드가 포함되어 있습니다. 첫 번째 필드 인 `evtdev`는 [include/linux/clockchips.h](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/include/linux/clockchips.h) 헤더 파일에 정의 된 `clock_event_device` 구조체에 대한 포인터를 나타내며 clock 이벤트 장치의 디스크립터를 나타냅니다. `clock 이벤트` 장치를 사용하면 앞으로 일어날 이벤트를 등록 할 수 있습니다. 이미 쓴 것처럼, 이 파트에서는 `clock_event_device` 구조체와 관련 API를 고려하지 않고, 다음 파트에서 볼 것입니다.
 
-The second field of the `tick_device` structure represents mode of the `tick_device`. As we already know, the mode can be one of the:
+`tick_device` 구조체의 두 번째 필드는 `tick_device`의 모드를 나타냅니다. 우리가 이미 알고 있듯이, 모드는 다음 중 하나 일 수 있습니다. :
 
 ```C
 enum tick_device_mode {
@@ -168,13 +170,13 @@ enum tick_device_mode {
 };
 ```
 
-Each `clock events` device in the system registers itself by the call of the `clockevents_register_device` function or `clockevents_config_and_register` function during initialization process of the Linux kernel. During the registration of a new `clock events` device, the Linux kernel calls the `tick_check_new_device` function that defined in the [kernel/time/tick-common.c](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/kernel/tick-common.c) source code file and checks the given `clock events` device should be used by the Linux kernel. After all checks, the `tick_check_new_device` function executes a call of the:
+시스템의 각 `clock 이벤트` 디바이스는 Linux 커널의 초기화 프로세스 중 `clockevents_register_device` 함수 또는 `clockevents_config_and_register`함수를 호출하여 자체적으로 등록됩니다. 새로운`clock events` 장치를 등록하는 동안 Linux 커널은 [kernel/time/tick-common.c](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/kernel/tick-common.c) 소스 코드 파일에 정의 된 `tick_check_new_device` 함수를 호출하고, 주어진 `clock 이벤트` 장치가 Linux 커널에서 사용됩니다. 모든 확인 후 `tick_check_new_device` 함수는 다음을 호출합니다. :
 
 ```C
 tick_install_broadcast_device(newdev);
 ```
 
-function that checks that the given `clock event` device can be broadcast device and install it, if the given device can be broadcast device. Let's look on the implementation of the `tick_install_broadcast_device` function:
+이 함수는 주어진 `clock 이벤트` 장치가 브로드 캐스트 장치일 수 있는지 확인하고 주어진 장치가 브로드 캐스트 장치 일 수 있는 경우 이를 설치합니. `tick_install_broadcast_device` 함수의 구현을 살펴 봅시다. :
 
 ```C
 void tick_install_broadcast_device(struct clock_event_device *dev)
@@ -202,17 +204,17 @@ void tick_install_broadcast_device(struct clock_event_device *dev)
 }
 ```
 
-First of all we get the current `clock event` device from the `tick_broadcast_device`. The `tick_broadcast_device` defined in the [kernel/time/tick-common.c](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/kernel/tick-common.c) source code file:
+우선 `tick_broadcast_device`에서 현재 `clock event` 장치를 얻습니다. [kernel/time/tick-common.c](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/kernel/tick-common.c) 소스 코드 파일에 `tick_broadcast_device` 가 정의되어 있습니다. :
 
 ```C
 static struct tick_device tick_broadcast_device;
 ```
 
-and represents external clock device that keeps track of events for a processor. The first step after we got the current clock device is the call of the `tick_check_broadcast_device` function which checks that a given clock events device can be utilized as broadcast device. The main point of the `tick_check_broadcast_device` function is to check value of the `features` field of the given `clock events` device. As we can understand from the name of this field, the `features` field contains a clock event device features. Available values defined in the [include/linux/clockchips.h](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/include/linux/clockchips.h) header file and can be one of the `CLOCK_EVT_FEAT_PERIODIC` - which represents a clock events device which supports periodic events and etc. So, the `tick_check_broadcast_device` function check `features` flags for `CLOCK_EVT_FEAT_ONESHOT`, `CLOCK_EVT_FEAT_DUMMY` and other flags and returns `false` if the given clock events device has one of these features. In other way the `tick_check_broadcast_device` function compares `ratings` of the given clock event device and current clock event device and returns the best.
+이는 프로세서의 이벤트를 추적하는 외부 클럭 장치를 나타냅니다. 현재 clock 장치를 얻은 후 첫 번째 단계는 주어진 clock 이벤트 장치가 브로드 캐스트 장치로 사용될 수 있는지 확인하는 `tick_check_broadcast_device` 함수의 호출입니다. `tick_check_broadcast_device` 함수의 중요한 포인트는 주어진 `clock events` 장치의 `features` 필드 값을 확인하는 것입니다. 이 필드의 이름에서 알 수 있듯이 `features` 필드에는 클럭 이벤트 장치의 특징들이 포함되어 있습니다. 사용가능한 값은 [include/linux/clockchips.h](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/include/linux/clockchips.h) 헤더 파일에 정의 되어있고, 주기적인 이벤트 등을 지원하는 clock 이벤트 장치를 나타내는 `CLOCK_EVT_FEAT_PERIODIC` 중 하나가 될 수 있습니다. 따라서, `tick_check_broadcast_device` 함수는 `CLOCK_EVT_FEAT_ONESHOT` 와 `CLOCK_EVT_FEAT_DUMMY` 와 기타 플래그에 대해 `features` 플래그를 확인하고, 주어진 클럭 이벤트 장치에 이러한 함수 중 하나가 있으면 `false`를 리턴합니다. 다른 방법으로 `tick_check_broadcast_device` 함수는 주어진 클럭 이벤트 장치와 현재 클럭 이벤트 장치의 `ratings`를 비교하여 더 좋은 것을 리턴합니다.
 
-After the `tick_check_broadcast_device` function, we can see the call of the `try_module_get` function that checks module owner of the clock events. We need to do it to be sure that the given `clock events` device was correctly initialized. The next step is the call of the `clockevents_exchange_device` function that defined in the [kernel/time/clockevents.c](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/kernel/time/clockevents.c) source code file and will release old clock events device and replace the previous functional handler with a dummy handler.
+`tick_check_broadcast_device` 함수 이후, 우리는 클럭 이벤트의 모듈 소유자를 검사하는 `try_module_get` 함수의 호출을 볼 수 있습니다. 주어진 `클럭 이벤트` 장치가 올바르게 초기화되었는지 확인해야합니다. 다음 단계는 [kernel/time/clockevents.c](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/kernel/time/clockevents.c)에 정의 된 `clockevents_exchange_device` 함수의 호출입니다. 소스 코드 파일 및 이전 클럭 이벤트 장치를 해제하고 이전 함수 핸들러를 더미 핸들러로 대체합니다.
 
-In the last step of the `tick_install_broadcast_device` function we check that the `tick_broadcast_mask` is not empty and start the given `clock events` device in periodic mode with the call of the `tick_broadcast_start_periodic` function:
+`tick_install_broadcast_device` 함수의 마지막 단계에서 우리는 `tick_broadcast_mask`가 비어 있지 않은지 확인하고, `tick_broadcast_start_periodic` 함수의 호출로 주기적인 모드에서 주어진 `클럭 이벤트` 장치를 시작합니다. :
 
 ```C
 if (!cpumask_empty(tick_broadcast_mask))
@@ -222,7 +224,7 @@ if (dev->features & CLOCK_EVT_FEAT_ONESHOT)
 	tick_clock_notify();
 ```
 
-The `tick_broadcast_mask` filled in the `tick_device_uses_broadcast` function that checks a `clock events` device during registration of this `clock events` device:
+`tick_broadcast_mask`는 이 `clock events` 장치를 등록하는 동안 `clock events` 장치를 검사하는 `tick_device_uses_broadcast` 함수으로 채워집니다. :
 
 ```C
 int cpu = smp_processor_id();
@@ -243,9 +245,9 @@ int tick_device_uses_broadcast(struct clock_event_device *dev, int cpu)
 }
 ```
 
-More about the `smp_processor_id` macro you can read in the fourth [part](https://0xax.gitbooks.io/linux-insides/content/Initialization/linux-initialization-4.html) of the Linux kernel initialization process chapter.
+`smp_processor_id` 매크로에 대한 자세한 내용은 Linux 커널 초기화 프로세스 챕터의 네 번째 [파트](https://junsoolee.gitbook.io/linux-insides-ko/summary/initialization/linux-initialization-4)에서 읽을 수 있습니다.
 
-The `tick_broadcast_start_periodic` function check the given `clock event` device and call the `tick_setup_periodic` function:
+`tick_broadcast_start_periodic` 함수는 주어진 `clock event` 장치를 점검하고 `tick_setup_periodic` 함수를 호출합니다. :
 
 ```
 static void tick_broadcast_start_periodic(struct clock_event_device *bc)
@@ -255,13 +257,13 @@ static void tick_broadcast_start_periodic(struct clock_event_device *bc)
 }
 ```
 
-that defined in the [kernel/time/tick-common.c](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/kernel/time/tick-common.c) source code file and sets broadcast handler for the given `clock event` device by the call of the following function:
+이 함수는 [kernel/time/tick-common.c](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/kernel/time/tick-common.c) 소스 코드 파일에 정의되어 있으며, 다음 함수를 호출하여 지정된 `클럭 이벤트` 장치의 브로드 캐스트 핸들러를 설정합니다. :
 
 ```C
 tick_set_periodic_handler(dev, broadcast);
 ```
 
-This function checks the second parameter which represents broadcast state (`on` or `off`) and sets the broadcast handler depends on its value:
+이 함수는 브로드 캐스트 상태(`on` 또는 `off`)를 나타내는 두 번째 매개 변수를 확인하고 브로드 캐스트 핸들러가 해당 값에 따라 설정되도록 합니다.
 
 ```C
 void tick_set_periodic_handler(struct clock_event_device *dev, int broadcast)
@@ -272,8 +274,7 @@ void tick_set_periodic_handler(struct clock_event_device *dev, int broadcast)
 		dev->event_handler = tick_handle_periodic_broadcast;
 }
 ```
-
-When an `clock event` device will issue an interrupt, the `dev->event_handler` will be called. For example, let's look on the interrupt handler of the [high precision event timer](https://en.wikipedia.org/wiki/High_Precision_Event_Timer) which is located in the [arch/x86/kernel/hpet.c](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/arch/x86/kernel/hpet.c) source code file:
+`clock event` 장치가 인터럽트를 발생시키면 `dev->event_handler`가 호출됩니다. 예를 들어, [arch/x86/kernel/hpet.c](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/arch/x86/kernel/hpet.c) 소스 코드 파일에 있는 [고정밀 이벤트 타이머](https://en.wikipedia.org/wiki/High_Precision_Event_Timer)의 인터럽트 핸들러를 살펴 보겠습니다.
 
 ```C
 static irqreturn_t hpet_interrupt_handler(int irq, void *data)
@@ -292,36 +293,36 @@ static irqreturn_t hpet_interrupt_handler(int irq, void *data)
 }
 ```
 
-The `hpet_interrupt_handler` gets the [irq](https://en.wikipedia.org/wiki/Interrupt_request_%28PC_architecture%29) specific data and check the event handler of the `clock event` device. Recall that we just set in the `tick_set_periodic_handler` function. So the `tick_handler_periodic_broadcast` function will be called in the end of the high precision event timer interrupt handler.
+`hpet_interrupt_handler`는 [irq](https://en.wikipedia.org/wiki/Interrupt_request_%28PC_architecture%29) 특정 데이터를 가져 와서 `클럭 이벤트` 장치의 이벤트 핸들러를 확인합니다. 우리는 방금 `tick_set_periodic_handler` 함수에서 설정했음을 떠올릴 수 있습니다. 따라서 고정밀 이벤트 타이머 인터럽트 핸들러의 끝에서 `tick_handler_periodic_broadcast` 함수가 호출됩니다.
 
-The `tick_handler_periodic_broadcast` function calls the
+`tick_handler_periodic_broadcast` 함수는 다음 함수를 호출합니다. :
 
 ```C
 bc_local = tick_do_periodic_broadcast();
 ```
 
-function which stores numbers of processors which have asked to be woken up in the temporary `cpumask` and call the `tick_do_broadcast` function:
+이 함수는 임시 `cpumask`에서 깨어나고 `tick_do_broadcast` 함수를 호출하도록 요청했던 프로세서의 수를 저장합니다. :
 
 ```
 cpumask_and(tmpmask, cpu_online_mask, tick_broadcast_mask);
 return tick_do_broadcast(tmpmask);
 ```
 
-The `tick_do_broadcast` calls the `broadcast` function of the given clock events which sends [IPI](https://en.wikipedia.org/wiki/Inter-processor_interrupt) interrupt to the set of the processors. In the end we can call the event handler of the given `tick_device`:
+`tick_do_broadcast`는 주어진 클럭 이벤트의 `broadcast` 함수를 호출하여 프로세서 세트에 [IPI](https://en.wikipedia.org/wiki/Inter-processor_interrupt) 인터럽트를 보냅니다. 결국 우리는 주어진 `tick_device`의 이벤트 핸들러를 호출 할 수 있습니다. :
 
 ```C
 if (bc_local)
 	td->evtdev->event_handler(td->evtdev);
 ```
 
-which actually represents interrupt handler of the local timer of a processor. After this a processor will wake up. That is all about `tick broadcast` framework in the Linux kernel. We have missed some aspects of this framework, for example reprogramming of a `clock event` device and broadcast with the oneshot timer and etc. But the Linux kernel is very big, it is not real to cover all aspects of it. I think it will be interesting to dive into with yourself.
+이것은 실제로 프로세서 로컬 타이머의 인터럽트 처리기를 나타냅니다. 이 후 프로세서가 깨어납니다. 이것이 리눅스 커널의 `tick broadcast` 프레임 워크에 관한 것입니다. 우리는 이 프레임 워크의 일부 측면, 예를 들어 `클럭 이벤트` 장치의 리프로그래밍과 oneshot 타이머 등의 브로드 캐스트와 같은 것들을 놓쳤습니다. Linux 커널은 매우 크기 때문에 우리는 모든 측면을 다루지는 않을 것입니다. 저는 여러분과 함께 뛰어드는 것이 흥미로울 것이라고 생각합니다.
 
-If you remember, we have started this part with the call of the `tick_init` function. We just consider the `tick_broadcast_init` function and related theory, but the `tick_init` function contains another call of a function and this function is - `tick_nohz_init`. Let's look on the implementation of this function.
+우리는 `tick_init` 함수의 호출로 이 파트를 시작했습니다. 우리는 단순히 `tick_broadcast_init` 함수와 이와 관련된 이론만 살펴보지만, `tick_init` 함수는 또 다른 함수의 호출을 포함하며 이 함수는 `tick_nohz_init`입니다. 이 함수의 구현을 살펴봅시다.
 
-Initialization of dyntick related data structures
+데이터 구조체와 관련된 dyntick의 초기화
 --------------------------------------------------------------------------------
 
-We already saw some information about `dyntick` concept in this part and we know that this concept allows kernel to disable system timer interrupts in the `idle` state. The `tick_nohz_init` function makes initialization of the different data structures which are related to this concept. This function defined in the [kernel/time/tick-sched.c](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/kernel/time/tich-sched.c) source code file and starts from the check of the value of the `tick_nohz_full_running` variable which represents state of the tick-less mode for the `idle` state and the state when system timer interrups are disabled during a processor has only one runnable task:
+우리는 이미 이 파트에서 `dyntick` 개념에 대한 정보를 보았으며, 이 개념으로 커널이 `idle` 상태에서 시스템 타이머 인터럽트를 비활성화 할 수 있다는 것을 알고 있습니다. `tick_nohz_init` 함수는 이 개념과 관련된 다른 데이터 구조체를 초기화합니다. 이 함수는 [kernel/time/tick-sched.c](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/kernel/time/tich-sched.c) 소스 코드 파일에 정의되어 있으며 `idle` 상태를 위한 tick이 없는 모드의 상태와, 프로세서가 실행 가능한 작업이 하나만 있는 동안 시스템 타이머 인터럽트가 비활성화 된 상태를 나타내는 `tick_nohz_full_running` 변수의 값을 확인하는 것부터 시작합니다. :
 
 ```C
 if (!tick_nohz_full_running) {
@@ -330,7 +331,7 @@ if (!tick_nohz_full_running) {
 }
 ```
 
-If this mode is not running we call the `tick_nohz_init_all` function that defined in the same source code file and check its result. The `tick_nohz_init_all` function tries to allocate the `tick_nohz_full_mask` with the call of the `alloc_cpumask_var` that will allocate space for a `tick_nohz_full_mask`. The `tick_nohz_full_mask` will store numbers of processors that have enabled full `NO_HZ`. After successful allocation of the `tick_nohz_full_mask` we set all bits in the `tick_nohz_full_mask`, set the `tick_nohz_full_running` and return result to the `tick_nohz_init` function:
+이 모드가 실행되고 있지 않다면 동일한 소스 코드 파일에 정의 된 `tick_nohz_init_all` 함수를 호출하고 결과를 확인하세요. `tick_nohz_init_all` 함수는 `tick_nohz_full_mask`를 위한 공간을 할당하는 `alloc_cpumask_var`의 호출로 `tick_nohz_full_mask`를 할당하려고 시도합니다. `tick_nohz_full_mask`는 전체 `NO_HZ`를 활성화 한 프로세서 수를 저장합니다. `tick_nohz_full_mask`를 성공적으로 할당 한 후, `tick_nohz_full_mask`의 모든 비트를 설정하고 `tick_nohz_full_running`을 설정하고 결과를 `tick_nohz_init` 함수로 반환합니다.
 
 ```C
 static int tick_nohz_init_all(void)
@@ -349,7 +350,7 @@ static int tick_nohz_init_all(void)
 }
 ```
 
-In the next step we try to allocate a memory space for the `housekeeping_mask`:
+다음 단계에서 `housekeeping_mask`에 메모리 공간을 할당하려고 시도합니다. :
 
 ```C
 if (!alloc_cpumask_var(&housekeeping_mask, GFP_KERNEL)) {
@@ -360,7 +361,7 @@ if (!alloc_cpumask_var(&housekeeping_mask, GFP_KERNEL)) {
 }
 ```
 
-This `cpumask` will store number of processor for `housekeeping` or in other words we need at least in one processor that will not be in `NO_HZ` mode, because it will do timekeeping and etc. After this we check the result of the architecture-specific `arch_irq_work_has_interrupt` function. This function checks ability to send inter-processor interrupt for the certain architecture. We need to check this, because system timer of a processor will be disabled during `NO_HZ` mode, so there must be at least one online processor which can send inter-processor interrupt to awake offline processor. This function defined in the [arch/x86/include/asm/irq_work.h](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/arch/x86/include/asm/irq_work.h) header file for the [x86_64](https://en.wikipedia.org/wiki/X86-64) and just checks that a processor has [APIC](https://en.wikipedia.org/wiki/Advanced_Programmable_Interrupt_Controller) from the [CPUID](https://en.wikipedia.org/wiki/CPUID):
+이 `cpumask`는 `housekeeping`을 위한 프로세서의 수를 저장합니다. 즉, 우리는 `NO_HZ` 모드가 아닌 적어도 하나의 프로세서가 필요합니다. 왜냐하면 timekeeping과 같은 일들을 할 것이기 때문입니다. 이후에 우리는 아키텍처 별 `arch_irq_work_has_interrupt` 함수를 확인합니다. 이 함수는 특정 아키텍처에 대한 프로세서 간 인터럽트 전송 기능을 확인합니다. 프로세서의 시스템 타이머는 `NO_HZ`모드에서 비활성화되므로, 프로세서 간 인터럽트를 보내 오프라인 프로세서를 깨울 수있는 하나 이상의 온라인 프로세서가 있어야하므로 이를 확인해야합니다. 이 함수는 [x86_64](https://en.wikipedia.org/wiki/X86-64)에 대해 [arch/x86/include/asm/irq_work.h](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/arch/x86/include/asm/irq_work.h) 헤더 파일에 정의되어 있으며, 프로세서가 [CPUID](https://en.wikipedia.org/wiki/CPUID)에서 [APIC](https://en.wikipedia.org/wiki/Advanced_Programmable_Interrupt_Controller)를 가지고 있는지 확인합니다. :
 
 ```C
 static inline bool arch_irq_work_has_interrupt(void)
@@ -369,7 +370,7 @@ static inline bool arch_irq_work_has_interrupt(void)
 }
 ```
 
-If a processor has not `APIC`, the Linux kernel prints warning message, clears the `tick_nohz_full_mask` cpumask, copies numbers of all possible processors in the system to the `housekeeping_mask` and resets the value of the `tick_nohz_full_running` variable:
+프로세서에 `APIC`가 없는 경우 Linux 커널은 경고 메시지를 출력하고 `tick_nohz_full_mask` cpumask를 지우고, 시스템에서 가능한 모든 프로세서 수를 `housekeeping_mask`에 복사 한 다음 `tick_nohz_full_running` 변수의 값을 재설정합니다. :
 
 ```C
 if (!arch_irq_work_has_interrupt()) {
@@ -382,7 +383,7 @@ if (!arch_irq_work_has_interrupt()) {
 }
 ```
 
-After this step, we get the number of the current processor by the call of the `smp_processor_id` and check this processor in the `tick_nohz_full_mask`. If the `tick_nohz_full_mask` contains a given processor we clear appropriate bit in the `tick_nohz_full_mask`:
+이 단계 후에, 우리는 `smp_processor_id`의 호출에 의해 현재 프로세서의 번호를 얻고 `tick_nohz_full_mask`에서 이 프로세서를 확인합니다. `tick_nohz_full_mask`에 주어진 프로세서가 포함되어 있으면 `tick_nohz_full_mask`에서 적절한 비트를 지웁니다. :
 
 ```C
 cpu = smp_processor_id();
@@ -393,34 +394,34 @@ if (cpumask_test_cpu(cpu, tick_nohz_full_mask)) {
 }
 ```
 
-Because this processor will be used for timekeeping. After this step we put all numbers of processors that are in the `cpu_possible_mask` and not in the `tick_nohz_full_mask`:
+이 프로세서는 timekeeping에 사용되기 때문입니다. 이 단계 후에 우리는 `tick_nohz_full_mask`가 아니라 `cpu_possible_mask`에 있는 모든 수의 프로세서를 넣습니다. :
 
 ```C
 cpumask_andnot(housekeeping_mask,
 	       cpu_possible_mask, tick_nohz_full_mask);
 ```
 
-After this operation, the `housekeeping_mask` will contain all processors of the system except a processor for timekeeping. In the last step of the `tick_nohz_init_all` function, we are going through all processors that are defined in the `tick_nohz_full_mask` and call the following function for an each processor:
+이 작업 후에 `housekeeping_mask`에는 timekeeping을 위한 프로세서를 제외한 모든 시스템 프로세서가 포함됩니다. `tick_nohz_init_all` 함수의 마지막 단계에서, 우리는 `tick_nohz_full_mask`에 정의 된 모든 프로세서를 살펴보고 각 프로세서에 대해 다음 함수를 호출합니다. :
 
 ```C
 for_each_cpu(cpu, tick_nohz_full_mask)
 	context_tracking_cpu_set(cpu);
 ```
 
-The `context_tracking_cpu_set` function defined in the [kernel/context_tracking.c](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/kernel/context_tracking.c) source code file and main point of this function is to set the `context_tracking.active` [percpu](https://0xax.gitbooks.io/linux-insides/content/Concepts/linux-cpu-1.html) variable to `true`. When the `active` field will be set to `true` for the certain processor, all [context switches](https://en.wikipedia.org/wiki/Context_switch) will be ignored by the Linux kernel context tracking subsystem for this processor.
+[kernel/context_tracking.c](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/kernel/context_tracking.c) 소스 코드 파일에 정의 된 `context_tracking_cpu_set` 함수와 이 함수의 중요 포인트는`context_tracking.active` [percpu](https://junsoolee.gitbook.io/linux-insides-ko/summary/concepts/linux-cpu-1) 변수를 `true`로 설정한다는 것입니다. 특정 프로세서에 대해 `active` 필드가 `true`로 설정되면 이 프로세서의 Linux 커널 컨텍스트 추적 서브시스템에서 모든 [context switches](https://en.wikipedia.org/wiki/Context_switch)를 무시합니다.
 
-That's all. This is the end of the `tick_nohz_init` function. After this `NO_HZ` related data structures will be initialized. We didn't see API of the `NO_HZ` mode, but will see it soon.
+이제 끝났습니다. 이것은 `tick_nohz_init` 함수의 끝입니다. 이 `NO_HZ` 이후에 관련된 데이터 구조체가 초기화됩니다. 우리는 `NO_HZ` 모드의 API를 보지 못했지만 곧 보게 될 것입니다.
 
-Conclusion
+결론
 --------------------------------------------------------------------------------
 
-This is the end of the third part of the chapter that describes timers and timer management related stuff in the Linux kernel. In the previous part got acquainted with the `clocksource` concept in the Linux kernel which represents framework for managing different clock source in a interrupt and hardware characteristics independent way. We continued to look on the Linux kernel initialization process in a time management context in this part and got acquainted with two new concepts for us: the `tick broadcast` framework and `tick-less` mode. The first concept helps the Linux kernel to deal with processors which are in deep sleep and the second concept represents the mode in which kernel may work to improve power management of `idle` processors.
+이 챕터의 세 번째 파트는 Linux 커널의 타이머와 타이머 관리 관련 내용을 설명합니다. 이전 파트에서는 인터럽트와 하드웨어 특성에 독립적으로 다른 클럭 소스를 관리하기위한 프레임 워크를 나타내는 Linux 커널의 `clocksource`개념에 대해 알게 되었습니다. 우리는 이 부분에서 시간 관리 컨텍스트에서 Linux 커널 초기화 프로세스를 계속 살펴 보았고 우리에게 두 가지 새로운 개념, 즉 `tick broadcast` 프레임 워크와 `tick-less` 모드에 대해 알게되었습니다. 첫 번째 개념은 리눅스 커널이 sleep 상태의 프로세서를 처리하는 데 도움이 되고, 두 번째 개념은 커널이 idle 프로세서의 전원 관리를 개선하기 위해 작동 할 수있는 모드를 나타냅니다.
 
-In the next part we will continue to dive into timer management related things in the Linux kernel and will see new concept for us - `timers`.
+다음 파트에서 우리는 계속해서 리눅스 커널에서의 타이머 관리 관련 내용을 살펴보고 새로운 개념인 `타이머`를 보게 될 것입니다.
 
-If you have questions or suggestions, feel free to ping me in twitter [0xAX](https://twitter.com/0xAX), drop me [email](anotherworldofworld@gmail.com) or just create [issue](https://github.com/0xAX/linux-insides/issues/new).
+질문이나 제안 사항이 있으면 [twitter](https://twitter.com/0xAX)에 의견이나 핑을 남겨주시거나. [email](anotherworldofworld@gmail.com) 보내주시거나, [issue](https://github.com/0xAX/linux-insides/issues/new)를 만들어주세요.
 
-**Please note that English is not my first language and I am really sorry for any inconvenience. If you found any mistakes please send me PR to [linux-insides](https://github.com/0xAX/linux-insides).**
+**영어는 제 모국어가 아닙니다. 그리고 여타 불편하셨던 점에 대해서 정말로 사과드립니다. 만약 실수를 찾아내셨다면 부디 [linux-insides 원본](https://github.com/0xAX/linux-internals)으로, 번역에 대해서는 [linux-insides 한글 번역](https://github.com/junsooo/linux-insides-ko)으로 PR을 보내주세요.**
 
 Links
 -------------------------------------------------------------------------------

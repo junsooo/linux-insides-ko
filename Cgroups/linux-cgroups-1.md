@@ -1,33 +1,33 @@
-Control Groups
+제어 그룹
 ================================================================================
 
-Introduction
+개요
 --------------------------------------------------------------------------------
 
-This is the first part of the new chapter of the [linux insides](https://0xax.gitbooks.io/linux-insides/content/) book and as you may guess by part's name - this part will cover [control groups](https://en.wikipedia.org/wiki/Cgroups) or `cgroups` mechanism in the Linux kernel.
+이번 파트는 [linux insides](https://0xax.gitbooks.io/linux-insides/content/) book의 새로운 장의 첫 부분이며 파트 제목으로 추측 할 수 있듯이 이번 파트는 Linux 커널의 [control groups](https://en.wikipedia.org/wiki/Cgroups) 다른 말로는 `cgroups` 메커니즘을 다룹니다.
 
-`Cgroups` are special mechanism provided by the Linux kernel which allows us to allocate kind of `resources` like processor time, number of processes per group, amount of memory per control group or combination of such resources for a process or set of processes. `Cgroups` are organized hierarchically and here this mechanism is similar to usual processes as they are hierarchical too and child `cgroups` inherit set of certain parameters from their parents. But actually they are not the same. The main differences between `cgroups` and normal processes that many different hierarchies of control groups may exist simultaneously in one time while normal process tree is always single. This was not a casual step because each control group hierarchy is attached to set of control group `subsystems`.
+`Cgroups`는 리눅스 커널이 제공하는 특별한 메커니즘으로, 프로세서 시간, 그룹당 프로세스 수, 제어 그룹당 메모리 양 또는 프로세스 또는 프로세스 집합에 대한 리소스 조합과 같은 일종의 '리소스'(`resources`)를 할당할 수 있게 해줍니다. `Cgroups`는 일반적인 프로세스가 계층적인 것과 유사하게 계층적으로 구성되어 있으며 자식 `cgroups`는 부모로부터 특정 매개 변수 집합을 상속합니다. 그러나 실제로 그들이 완전히 동일하지는 않습니다. `cgroup`과 (여러 프로세스 그룹의 계층이 동시에 존재할 수 있는) 일반 프로세스와의 주요 차이점은 일반 프로세스 트리는 항상 단일이라는 점입니다. 이(*cgroup*)는 쉬운 단계가 아니었는데, 각 제어 그룹 계층 구조가 '서브시스템'(`subsystems`) 제어 그룹 집합에 붙어 있기 때문입니다.
 
-One `control group subsystem` represents one kind of resources like a processor time or number of [pids](https://en.wikipedia.org/wiki/Process_identifier) or in other words number of processes for a `control group`. Linux kernel provides support for following twelve `control group subsystems`:
+하나의 '제어 그룹 서브시스템'(`control group subsystem`)은 프로세서 시간 또는 [pids](https://en.wikipedia.org/wiki/Process_identifier), 다른 말로는 `control group`에 대한 프로세스 수 등과 같이 한 종류의 리소스를 나타냅니다. 리눅스 커널은 다음과 같은 12 개의 `control group subsystem`을 지원합니다.
 
-* `cpuset` - assigns individual processor(s) and memory nodes to task(s) in a group;
-* `cpu` - uses the scheduler to provide cgroup tasks access to the processor resources;
-* `cpuacct` - generates reports about processor usage by a group;
-* `io` - sets limit to read/write from/to [block devices](https://en.wikipedia.org/wiki/Device_file);
-* `memory` - sets limit on memory usage by a task(s) from a group;
-* `devices` - allows access to devices by a task(s) from a group;
-* `freezer` - allows to suspend/resume for a task(s) from a group;
-* `net_cls` - allows to mark network packets from task(s) from a group;
-* `net_prio` - provides a way to dynamically set the priority of network traffic per network interface for a group;
-* `perf_event` - provides access to [perf events](https://en.wikipedia.org/wiki/Perf_\(Linux\)) to a group;
-* `hugetlb` - activates support for [huge pages](https://www.kernel.org/doc/Documentation/vm/hugetlbpage.txt) for a group;
-* `pid` - sets limit to number of processes in a group.
+* `cpuset` - 개별 프로세서 및 메모리 노드를 그룹의 작업에 할당합니다;
+* `cpu` -스케줄러를 사용하여 cgroup 작업에 프로세서 리소스에 대한 액세스 권한을 제공합니다;
+* `cpuacct` - 그룹 별 프로세서 사용량에 대한 보고를 생성합니다;
+* `io` -[block devices](https://en.wikipedia.org/wiki/Device_file)에서 읽기/쓰기 제한을 설정합니다;
+* `memory` - 그룹의 작업에 의한 메모리 사용 제한을 설정합니다;
+* `devices` - 그룹의 작업이 장치에 액세스 할 수 있도록 합니다;
+* `freezer` - 그룹에서 작업을 일시중지/재개 할 수 있도록 합니다;
+* `net_cls` - 그룹의 작업에서 네트워크 패킷을 표시(mark) 할 수 있게 합니다;
+* `net_prio` - 그룹의 네트워크 인터페이스마다 네트워크 트래픽 우선 순위를 동적으로 설정하는 방법을 제공합니다;
+* `perf_event` - 그룹에 [perf events](https://en.wikipedia.org/wiki/Perf_\(Linux\))에 대한 액세스를 제공합니다;
+* `hugetlb` - 그룹의 [huge pages](https://www.kernel.org/doc/Documentation/vm/hugetlbpage.txt)에 대한 지원을 활성화합니다;
+* `pid` - 그룹의 프로세스 수에 제한을 설정합니다.
 
-Each of these control group subsystems depends on related configuration option. For example the `cpuset` subsystem should be enabled via `CONFIG_CPUSETS` kernel configuration option, the `io` subsystem via `CONFIG_BLK_CGROUP` kernel configuration option and etc. All of these kernel configuration options may be found in the `General setup → Control Group support` menu:
+이러한 각 제어 그룹 하위 시스템은 관련한 구성 옵션에 따라 다릅니다. 예를 들어 `cpuset` 서브시스템은`CONFIG_CPUSETS` 커널 구성 옵션을 통해, `io` 서브 시스템은 `CONFIG_BLK_CGROUP` 커널 구성 옵션 등을 통해 활성화해야합니다. 이러한 모든 커널 구성 옵션은 `General setup → Control Group`에서 찾을 수 있습니다:
 
 ![menuconfig](http://oi66.tinypic.com/2rc2a9e.jpg)
 
-You may see enabled control groups on your computer via [proc](https://en.wikipedia.org/wiki/Procfs) filesystem:
+[proc](https://en.wikipedia.org/wiki/Procfs) 파일 시스템을 통해서:
 
 ```
 $ cat /proc/cgroups 
@@ -46,7 +46,7 @@ hugetlb	10	1	1
 pids	5	69	1
 ```
 
-or via [sysfs](https://en.wikipedia.org/wiki/Sysfs):
+혹은 [sysfs](https://en.wikipedia.org/wiki/Sysfs)을 통해서 컴퓨터에서 활성화 된 제어 그룹을 볼 수 있습니다.:
 
 ```
 $ ls -l /sys/fs/cgroup/
@@ -68,13 +68,13 @@ dr-xr-xr-x 5 root root  0 Dec  2 22:37 pids
 dr-xr-xr-x 5 root root  0 Dec  2 22:37 systemd
 ```
 
-As you already may guess that `control groups` mechanism is not such mechanism which was invented only directly to the needs of the Linux kernel, but mostly for userspace needs. To use a `control group`, we should create it at first. We may create a `cgroup` via two ways.
+이미 예상 하셨겠지만 `control groups` 메커니즘은 직접적인 리눅스 커널에 대한 요구사항으로가 아니라 주로 사용자 공간 요구에 대한 요구사항으로 개발 된 메커니즘입니다. `control group`을 사용하려면 먼저 컨트롤 그룹을 만들어야합니다. 우리는 두 가지 방법으로 `cgroup`을 만들 수 있습니다.
 
-The first way is to create subdirectory in any subsystem from `/sys/fs/cgroup` and add a pid of a task to a `tasks` file which will be created automatically right after we will create the subdirectory.
+첫 번째 방법은 `/sys/fs/cgroup`에서 서브시스템에 서브 디렉토리(subdirectory)를 생성하고 서브 디렉토리를 생성 한 직후 자동으로 생성되는`tasks` 파일에 작업의 pid를 추가하는 것입니다.
 
-The second way is to create/destroy/manage `cgroups` with utils from `libcgroup` library (`libcgroup-tools` in Fedora).
+두 번째 방법은 `libcgroup` 라이브러리 (Fedora는 `libcgroup-tools`)에서 utils로 `cgroups`을 생성/파기/관리하는 것입니다.
 
-Let's consider simple example. Following [bash](https://www.gnu.org/software/bash/) script will print a line to `/dev/tty` device which represents control terminal for the current process:
+간단한 예를 생각해 봅시다. [bash](https://www.gnu.org/software/bash/) 스크립트에 따르면 현재 프로세스의 제어 터미널을 나타내는 `/dev/tty` 디바이스에 한 줄이 출력될 것입니다:
 
 ```shell
 #!/bin/bash
@@ -86,7 +86,7 @@ do
 done
 ```
 
-So, if we will run this script we will see following result:
+따라서 이 스크립트를 실행하면 다음과 같은 결과가 나타납니다.
 
 ```
 $ sudo chmod +x cgroup_test_script.sh
@@ -99,25 +99,25 @@ print line
 ...
 ```
 
-Now let's go to the place where `cgroupfs` is mounted on our computer. As we just saw, this is `/sys/fs/cgroup` directory, but you may mount it everywhere you want.
+이제 컴퓨터에 `cgroupfs`가 마운트되어있는 곳으로 갑시다. 방금 봤듯이, 이 디렉토리는 `/sys/fs/cgroup` 디렉토리이지만 원한다면 원하는 곳 어디든 마운트 할 수 있습니다.
 
 ```
 $ cd /sys/fs/cgroup
 ```
 
-And now let's go to the `devices` subdirectory which represents kind of resources that allows or denies access to devices by tasks in a `cgroup`:
+이제 `cgroup`의 작업의 장치에 대한 액세스를 허용하거나 거부하는 종류의 리소스를 나타내는 `devices` 서브 디렉토리로 이동하겠습니다.
 
 ```
 # cd devices
 ```
 
-and create `cgroup_test_group` directory there:
+그리고 거기에 `cgroup_test_group` 디렉토리를 만듭니다:
 
 ```
 # mkdir cgroup_test_group
 ```
 
-After creation of the `cgroup_test_group` directory, following files will be generated there:
+`cgroup_test_group` 디렉토리가 생성되면 다음 파일이 생성됩니다:
 
 ```
 /sys/fs/cgroup/devices/cgroup_test_group$ ls -l
@@ -131,20 +131,20 @@ total 0
 -rw-r--r-- 1 root root 0 Dec  3 22:55 tasks
 ```
 
-For this moment we are interested in `tasks` and `devices.deny` files. The first `tasks` files should contain pid(s) of processes which will be attached to the `cgroup_test_group`. The second `devices.deny` file contain list of denied devices. By default a newly created group has no any limits for devices access. To forbid a device (in our case it is `/dev/tty`) we should write to the `devices.deny` following line:
+여기서 우리의 관심사는 `tasks`와 `devices.deny` 파일입니다. 첫 번째 `tasks` 파일은`cgroup_test_group`에 첨부 될 프로세스의 pid를 포함할 것입니다. 두 번째로 `devices.deny` 파일은 거부된 장치 목록을 포함합니다. 기본적으로 새로 만든 그룹에는 장치 액세스에 대한 제한이 없습니다. 장치를 금지하려면 (이 경우`/dev/tty`) `devices.deny`에 다음 명령줄을 작성합니다:
 
 ```
 # echo "c 5:0 w" > devices.deny
 ```
 
-Let's go step by step through this line. The first `c` letter represents type of a device. In our case the `/dev/tty` is `char device`. We can verify this from output of `ls` command:
+이 명령줄을 단계별로 살펴 보겠습니다. 첫 번째 `c`문자는 장치의 유형을 나타냅니다. 우리의 경우 `/dev/tty`는`char device`입니다. `ls` 명령어의 출력에서 이를 확인할 수 있습니다.
 
 ```
 ~$ ls -l /dev/tty
 crw-rw-rw- 1 root tty 5, 0 Dec  3 22:48 /dev/tty
 ```
 
-see the first `c` letter in a permissions list. The second part is `5:0` is minor and major numbers of the device. You can see these numbers in the output of `ls` too. And the last `w` letter forbids tasks to write to the specified device. So let's start the `cgroup_test_script.sh` script:
+권한 목록에서 첫 번째 `c` 문자를 살펴보세요. 두 번째 부분 `5:0`은 장치의 부(minor) 번호와 주요(major) 번호입니다. 이 숫자는 `ls`의 결과에서도 볼 수 있습니다. 그리고 마지막 `w` 문자는 작업이 지정된 장치에 쓰는 것을 금지합니다. 그럼  `cgroup_test_script.sh` 스크립트를 시작해 봅시다 :
 
 ```
 ~$ ./cgroup_test_script.sh 
@@ -155,13 +155,13 @@ print line
 ...
 ```
 
-and add pid of this process to the `devices/tasks` file of our group:
+그리고 이 프로세스의 pid를 우리의 그룹의 `devices/tasks` 파일에 추가합니다:
 
 ```
 # echo $(pidof -x cgroup_test_script.sh) > /sys/fs/cgroup/devices/cgroup_test_group/tasks
 ```
 
-The result of this action will be as expected:
+그 결과는 예상한 대로:
 
 ```
 ~$ ./cgroup_test_script.sh 
@@ -174,7 +174,7 @@ print line
 ./cgroup_test_script.sh: line 5: /dev/tty: Operation not permitted
 ```
 
-Similar situation will be when you will run you [docker](https://en.wikipedia.org/wiki/Docker_\(software\)) containers for example:
+[docker](https://en.wikipedia.org/wiki/Docker_\(software\)) 컨테이너를 실행할 때도 비슷한 상황이 발생합니다. 예를 들어:
 
 ```
 ~$ docker ps
@@ -190,7 +190,7 @@ fa2d2085cd1c        mariadb:10          "docker-entrypoint..."   12 days ago    
 ...
 ```
 
-So, during startup of a `docker` container, `docker` will create a `cgroup` for processes in this container:
+따라서, `docker` 컨테이너를 시작하는 동안 `docker`는 이 컨테이너 안의 프로세스에 대한 `cgroup`을 만듭니다.
 
 ```
 $ docker exec -it mysql-work /bin/bash
@@ -200,7 +200,7 @@ $ top
    77 root      20   0   21948   2424   2056 R   0.0  0.0   0:00.00 top
 ```
 
-And we may see this `cgroup` on host machine:
+그리고 호스트 컴퓨터에서 이 `cgroup`을 볼 수 있습니다 :
 
 ```C
 $ systemd-cgls
@@ -213,20 +213,20 @@ Control group /:
 │   └─6404 /bin/bash
 ```
 
-Now we know a little about `control groups` mechanism, how to use it manually and what's purpose of this mechanism. Time to look inside of the Linux kernel source code and start to dive into implementation of this mechanism.
+이제 우리는 `control group` 메커니즘과 수동으로 이를 사용하는 방법 및 이 메커니즘의 목적에 대해 약간 알게 되었습니다. 리눅스 커널 소스 코드를 살펴보고이 메커니즘의 구현을 시작해봅시다.
 
-Early initialization of control groups
+제어 그룹의 초기 초기화
 --------------------------------------------------------------------------------
 
-Now after we just saw little theory about `control groups` Linux kernel mechanism, we may start to dive into the source code of Linux kernel to acquainted with this mechanism closer. As always we will start from the initialization of `control groups`. Initialization of `cgroups` divided into two parts in the Linux kernel: early and late. In this part we will consider only `early` part and `late` part will be considered in next parts.
+이제 `제어 그룹` 리눅스 커널 메커니즘에 대한 약간의 이론을 본 후, 이 메커니즘에 더 친숙해지기 위해 리눅스 커널의 소스 코드를 살펴보겠습니다. 항상 그랬듯이 우리는 `control groups`의 초기화부터 시작할 것입니다. `cgroups`의 초기화는 리눅스 커널에서 두 부분으로 나뉩니다 : 초기(early)와 후기(late). 이 부분에서는 초기(`early`)부분 만 고려하고 후기(`late`)부분은 다음 파트에서 다루겠습니다.
 
-Early initialization of `cgroups` starts from the call of the:
+`cgroups`의 초기 초기화는 리눅스 커널의 초기 초기화 시기동안 [init/main.c](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/init/main.c)의:
 
 ```C
 cgroup_init_early();
 ```
 
-function in the [init/main.c](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/init/main.c) during early initialization of the Linux kernel. This function is defined in the [kernel/cgroup.c](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/kernel/cgroup.c) source code file and starts from the definition of two following local variables:
+함수 호출에서 시작합니다. 이 함수는 [kernel/cgroup.c](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/kernel/cgroup.c) 소스 코드 파일에 정의되어 있으며 다음 두 가지 지역 변수를 정의하면서 시작합니다:
 
 ```C
 int __init cgroup_init_early(void)
@@ -239,7 +239,7 @@ int __init cgroup_init_early(void)
 }
 ```
 
-The `cgroup_sb_opts` structure defined in the same source code file and looks:
+`cgroup_sb_opts` 구조체는 동일한 소스 코드 파일에 정의되어 있으며 `cgroupfs`의 마운트 옵션을 나타내고 다음과 같이 생겼습니다:
 
 ```C
 struct cgroup_sb_opts {
@@ -252,13 +252,13 @@ struct cgroup_sb_opts {
 };
 ```
 
-which represents mount options of `cgroupfs`. For example we may create named cgroup hierarchy (with name `my_cgrp`) with the `name=` option and without any subsystems:
+예를 들어 `name=`옵션이 있고 서브시스템은 없이 (`my_cgrp`로) 이름이 지정된 cgroup 계층(hierarchy)을 작성할 수 있습니다.
 
 ```
 $ mount -t cgroup -oname=my_cgrp,none /mnt/cgroups
 ```
 
-The second variable - `ss` has type - `cgroup_subsys` structure which is defined in the [include/linux/cgroup-defs.h](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/include/linux/cgroup-defs.h) header file and as you may guess from the name of the type, it represents a `cgroup` subsystem. This structure contains various fields and callback functions like:
+두 번째 변수- `ss`는 [include/linux/cgroup-defs.h](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/include/linux/cgroup-defs.h) 헤더 파일에 정의된 `cgroup_subsys` 구조체 타입을 가지며, 형식 이름에서 알 수 있듯이 이는 `cgroup` 서브시스템을 나타냅니다. 이 구조체는 다음과 같은 다양한 필드와 콜백 함수를 가지고 있습니다:
 
 ```C
 struct cgroup_subsys {
@@ -277,24 +277,24 @@ struct cgroup_subsys {
 }
 ```
 
-Where for example `css_online` and `css_offline` callbacks are called after a cgroup successfully will complete all allocations and a cgroup will be before releasing respectively. The `early_init` flags marks subsystems which may/should be initialized early. The `id` and `name` fields represents unique identifier in the array of registered subsystems for a cgroup and `name` of a subsystem respectively. The last - `root` fields represents pointer to the root of of a cgroup hierarchy.
+예를 들어 여기서 `ccs_online` 및 `css_offline` 콜백은 cgroup이 모든 할당을 성공적으로 완료한 후 호출되고 cgroup은 각각 해제되기 전에 호출됩니다. `early_init` 플래그는 초기에 초기화 될 수 있는 서브시스템을 표시합니다. `id` 및 `name` 필드는 각각 등록 된 서브 시스템 배열의 고유 식별자와 서브 시스템의 `name`을 나타냅니다. 마지막 `root` 필드는 cgroup 계층의 루트에 대한 포인터를 나타냅니다.
 
-Of course the `cgroup_subsys` structure is bigger and has other fields, but it is enough for now. Now as we got to know important structures related to `cgroups` mechanism, let's return to the `cgroup_init_early` function. Main purpose of this function is to do early initialization of some subsystems. As you already may guess, these `early` subsystems should have `cgroup_subsys->early_init = 1`. Let's look what subsystems may be initialized early.
+물론 `cgroup_subsys` 구조체는 더 크고 다른 필드들도 가지고 있지만 현재로서는 이걸로 충분합니다. 이제 `cgroups` 메커니즘과 관련된 중요한 구조체에 대해 알았으니 이제 `cgroup_init_early` 함수로 돌아갑시다. 이 함수의 주요 목적은 몇몇 서브 시스템을 초기 초기화하는 것입니다. 이미 짐작하셨겠지만, 이 '초기'(`early`) 서브 시스템은 `cgroup_subsys-> early_init = 1`을 가지고 있어야합니다. 어떤 서브 시스템이 초기에 초기화 될 수 있는지 살펴봅시다.
 
-After the definition of the two local variables we may see following lines of code:
+두 개의 로컬 변수를 정의한 후 다음 코드 줄을 볼 수 있습니다.
 
 ```C
 init_cgroup_root(&cgrp_dfl_root, &opts);
 cgrp_dfl_root.cgrp.self.flags |= CSS_NO_REF;
 ```
 
-Here we may see call of the `init_cgroup_root` function which will execute initialization of the default unified hierarchy and after this we set `CSS_NO_REF` flag in state of this default `cgroup` to disable reference counting for this css. The `cgrp_dfl_root` is defined in the same source code file:
+여기서는 기본 통합 계층(default unified hierarchy)의 초기화를 실행하는 `init_cgroup_root` 함수의 호출을 볼 수 있으며, 그 후 이 css의 참조 카운트를 비활성화하기 위해 이 기본 `cgroup` 상태에서 `CSS_NO_REF` 플래그를 설정합니다. `cgrp_dfl_root`는 동일한 소스 코드 파일에 정의되어 있습니다 :
 
 ```C
 struct cgroup_root cgrp_dfl_root;
 ```
 
-Its `cgrp` field represented by the `cgroup` structure which represents a `cgroup` as you already may guess and defined in the [include/linux/cgroup-defs.h](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/include/linux/cgroup-defs.h) header file. We already know that a process which is represented by the `task_struct` in the Linux kernel. The `task_struct` does not contain direct link to a `cgroup` where this task is attached. But it may be reached via `css_set` field of the `task_struct`. This `css_set` structure holds pointer to the array of subsystem states:
+이미 추측하셨듯 `cgrp` 필드는 `cgroup` 구조체로 나타내어지고 `cgroup`을 나타내며 [include/linux/cgroup-defs.h] (https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/include/linux/cgroup-defs.h) 헤더 파일에 정의되어 있습니다. 우리는 이미 리눅스 커널에서 `task_struct`로 표현되는 프로세스를 알고 있습니다. `task_struct`에는 이 작업이 연결된 `cgroup`에 대한 직접적인 링크가 없습니다. 그러나 `task_struct`의 `css_set` 필드를 통해 이에 도달 할 수 있습니다. 이 `css_set` 구조체는 서브 시스템 상태의 배열에 대한 포인터를 가지고 있습니다.
 
 ```C
 struct css_set {
@@ -308,7 +308,7 @@ struct css_set {
 }
 ```
 
-And via the `cgroup_subsys_state`, a process may get a `cgroup` that this process is attached to:
+또한 `cgroup_subsys_state`를 통해 프로세스는 그 프로세스가 연결된 `cgroup`을 얻을 수 있습니다:
 
 ```C
 struct cgroup_subsys_state {
@@ -322,7 +322,7 @@ struct cgroup_subsys_state {
 }
 ```
 
-So, the overall picture of `cgroups` related data structure is following:
+따라서 `cgroups`과 관련된 데이터 구조의 전체적인 그림은 다음과 같습니다.
 
 ```                                                 
 +-------------+         +---------------------+    +------------->+---------------------+          +----------------+
@@ -360,13 +360,13 @@ So, the overall picture of `cgroups` related data structure is following:
 
 
 
-So, the `init_cgroup_root` fills the `cgrp_dfl_root` with the default values. The next thing is assigning initial `css_set` to the `init_task` which represents first process in the system:
+따라서 `init_cgroup_root`는 `cgrp_dfl_root`를 기본값으로 채 웁니다. 그 다음은 초기 `css_set`을 시스템의 첫 번째 프로세스를 나타내는 `init_task`에 할당하는 것입니다.
 
 ```C
 RCU_INIT_POINTER(init_task.cgroups, &init_css_set);
 ```
 
-And the last big thing in the `cgroup_init_early` function is initialization of `early cgroups`. Here we go over all registered subsystems and assign unique identity number, name of a subsystem and call the `cgroup_init_subsys` function for subsystems which are marked as early:
+그리고 `cgroup_init_early` 함수에서 마지막으로 짚어 봐야 할 것은 `early cgroups`의 초기화입니다. 여기서는 등록된 모든 서브 시스템을 살펴보고 고유 ID, 서브 시스템 이름을 지정하고 초기로 표시(mark)된 서브 시스템에 대해 `cgroup_init_subsys` 함수를 호출합니다.
 
 ```C
 for_each_subsys(ss, i) {
@@ -378,7 +378,7 @@ for_each_subsys(ss, i) {
 }
 ```
 
-The `for_each_subsys` here is a macro which is defined in the [kernel/cgroup.c](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/kernel/cgroup.c) source code file and just expands to the `for` loop over `cgroup_subsys` array. Definition of this array may be found in the same source code file and it looks in a little unusual way:
+여기서 `for_each_subsys`는 [kernel/cgroup.c](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/kernel/cgroup.c) 소스 코드 파일에 정의 된 매크로이며 그저 `cgroup_subsys` 배열에 대한 `for` 루프로 확장됩니다. 그 배열의 정의는 동일한 소스 코드 파일에서 찾을 수 있으며 약간 특이한 방식같아 보입니다:
 
 ```C
 #define SUBSYS(_x) [_x ## _cgrp_id] = &_x ## _cgrp_subsys,
@@ -388,7 +388,7 @@ The `for_each_subsys` here is a macro which is defined in the [kernel/cgroup.c](
 #undef SUBSYS
 ```
 
-It is defined as `SUBSYS` macro which takes one argument (name of a subsystem) and defines `cgroup_subsys` array of cgroup subsystems. Additionally we may see that the array is initialized with content of the [linux/cgroup_subsys.h](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/include/linux/cgroup_subsys.h) header file. If we will look inside of this header file we will see again set of the `SUBSYS` macros with the given subsystems names:
+그것은 하나의 인자(서브 시스템의 이름)를 취하고 cgroup 서브시스템의 `cgroup_subsys` 배열을 정의하는`SUBSYS` 매크로로 정의됩니다. 또한 배열이 [linux/cgroup_subsys.h](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/include/linux/cgroup_subsys.h) 헤더 파일의 내용으로 초기화 된 것을 볼 수 있습니다. 이 헤더 파일을 살펴보면 주어진 서브시스템 이름을 가진 `SUBSYS` 매크로 세트가 다시 나타납니다.
 
 ```C
 #if IS_ENABLED(CONFIG_CPUSETS)
@@ -403,7 +403,7 @@ SUBSYS(cpu)
 ...
 ```
 
-This works because of `#undef` statement after first definition of the `SUBSYS` macro. Look at the `&_x ## _cgrp_subsys` expression. The `##` operator concatenates right and left expression in a `C` macro. So as we passed `cpuset`, `cpu` and etc., to the `SUBSYS` macro, somewhere `cpuset_cgrp_subsys`, `cp_cgrp_subsys` should be defined. And that's true. If you will look in the [kernel/cpuset.c](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/kernel/cpuset.c) source code file, you will see this definition:
+이것은 `SUBSYS` 매크로를 처음 정의한 뒤에 있는 `#undef` 문 때문에 작동합니다. `&_x##_cgrp_subsys` 표현식을보면 `##`연산자는 `C` 매크로에서 오른쪽과 왼쪽 표현식을 연결합니다. 그러므로 `cpuset`,`cpu` 등을`SUBSYS` 매크로에 전달할 때 `cpuset_cgrp_subsys`,`cp_cgrp_subsys`가 정의되었어야 할 것입니다. 그리고 그것은 사실입니다. [kernel/cpuset.c](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/kernel/cpuset.c) 소스 코드 파일을 보면 다음 정의가 표시됩니다.
 
 ```C
 struct cgroup_subsys cpuset_cgrp_subsys = {
@@ -414,26 +414,26 @@ struct cgroup_subsys cpuset_cgrp_subsys = {
 };
 ```
 
-So the last step in the `cgroup_init_early` function is initialization of early subsystems with the call of the `cgroup_init_subsys` function. Following early subsystems will be initialized:
+따라서 `cgroup_init_early` 함수의 마지막 단계는 `cgroup_init_subsys` 함수를 호출하여 초기 서브시스템을 초기화하는 것입니다. 다음과 같은 초기 서브시스템이 초기화될 것입니다.
 
 * `cpuset`;
 * `cpu`;
 * `cpuacct`.
 
-The `cgroup_init_subsys` function does initialization of the given subsystem with the default values. For example sets root of hierarchy, allocates space for the given subsystem with the call of the `css_alloc` callback function, link a subsystem with a parent if it exists, add allocated subsystem to the initial process and etc.
+`cgroup_init_subsys` 함수는 주어진 서브 시스템을 기본값으로 초기화합니다. 예를 들어 계층의 루트를 설정하고, `css_alloc` 콜백 함수를 호출하여 지정된 서브 시스템에 공간을 할당하고, 서브시스템이 있는 경우 서브시스템을 부모와 연결하고, 할당 된 서브 시스템을 초기 프로세스에 추가하는 등입니다.
 
-That's all. From this moment early subsystems are initialized.
+이것으로 이 순간 초기 서브 시스템이 초기화되었습니다.
 
-Conclusion
+결론
 --------------------------------------------------------------------------------
 
-It is the end of the first part which describes introduction into `Control groups` mechanism in the Linux kernel. We covered some theory and the first steps of initialization of stuffs related to `control groups` mechanism. In the next part we will continue to dive into the more practical aspects of `control groups`.
+이것으로 리눅스 커널에서 `Control Groups` 메커니즘을 소개하는 것은 첫 번째 파트는 끝입니다. 우리는 `Control Group`메커니즘과 관련된 것들을 초기화하는 몇 가지 이론과 그 첫번재 단계를 다루었습니다. 다음 부분에서는 제어 그룹(`control groups`)의 보다 실용적인 측면을 계속해서 살펴볼 것입니다.
 
-If you have any questions or suggestions write me a comment or ping me at [twitter](https://twitter.com/0xAX).
+질문이나 제안 사항이 있으면 [twitter](https://twitter.com/0xAX)에 의견을 보내거나 핑 (Ping) 해주십시오.
 
-**Please note that English is not my first language, And I am really sorry for any inconvenience. If you find any mistakes please send me a PR to [linux-insides](https://github.com/0xAX/linux-insides).**
+**영어는 제 모국어가 아닙니다, 그리고 여타 불편하셨던 점에 대해서 정말로 사과드립니다. 만약 실수들을 찾아내셨다면 부디 [linux-insides 원본](https://github.com/0xAX/linux-internals)으로, 번역에 대해서는 [linux-insides 한국 번역](https://github.com/junsooo/linux-insides-ko)로 PR을 보내주세요.**
 
-Links
+참고 링크
 --------------------------------------------------------------------------------
 
 * [control groups](https://en.wikipedia.org/wiki/Cgroups)

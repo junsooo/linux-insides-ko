@@ -1,12 +1,13 @@
-Kernel initialization. Part 7.
+커널 초기화. Part 7.
 ================================================================================
 
-The End of the architecture-specific initialization, almost...
+아키텍쳐 별 초기화의 끝, 거의...
 ================================================================================
 
-This is the seventh part of the Linux Kernel initialization process which covers insides of the `setup_arch` function from the [arch/x86/kernel/setup.c](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/arch/x86/kernel/setup.c#L861). As you can know from the previous [parts](https://0xax.gitbooks.io/linux-insides/content/Initialization/index.html), the `setup_arch` function does some architecture-specific (in our case it is [x86_64](http://en.wikipedia.org/wiki/X86-64)) initialization stuff like reserving memory for kernel code/data/bss, early scanning of the [Desktop Management Interface](http://en.wikipedia.org/wiki/Desktop_Management_Interface), early dump of the [PCI](http://en.wikipedia.org/wiki/PCI) device and many many more. If you have read the previous [part](https://0xax.gitbooks.io/linux-insides/content/Initialization/linux-initialization-6.html), you can remember that we've finished it at the `setup_real_mode` function. In the next step, as we set limit of the [memblock](https://0xax.gitbooks.io/linux-insides/content/MM/linux-mm-1.html) to the all mapped pages, we can see the call of the `setup_log_buf` function from the [kernel/printk/printk.c](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/kernel/printk/printk.c).
 
-The `setup_log_buf` function setups kernel cyclic buffer and its length depends on the `CONFIG_LOG_BUF_SHIFT` configuration option. As we can read from the documentation of the `CONFIG_LOG_BUF_SHIFT` it can be between `12` and `21`. In the insides, buffer defined as array of chars:
+이것은 Linux Kernel 초기화 프로세스의 일곱 번째 파트로 [arch/x86/kernel/setup.c](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/arch/x86/kernel/setup.c#L861)의 `setup_arch` 함수 내부를 다룹니다. 이전 [파트들](https://junsoolee.gitbook.io/linux-insides-ko/summary/initialization)에서 보았듯이, `setup_arch` 함수는 커널 코드/데이터/bss를위한 메모리 예약, [Desktop Management Interface](http://en.wikipedia.org/wiki/Desktop_Management_Interface), early dump of the [PCI](http://en.wikipedia.org/wiki/PCI) 의 초기 스캐닝, PCI의 덤프 초기화와 같은 많은 아키텍쳐 별(우리의 경우 [x86_64]) 초기화 과정을 수행합니다. 이전 [파트](https://junsoolee.gitbook.io/linux-insides-ko/summary/initialization/linux-initialization-6)를 읽었다면, 우리가 `setup_real_mode` 함수에서 끝났다는 것을 기억하실 것입니다. 다음 단계에서 [memblock](https://junsoolee.gitbook.io/linux-insides-ko/summary/mm/linux-mm-1)의 제한을 모든 매핑 된 페이지로 설정하면 [kernel/printk/printk.c](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/kernel/printk/printk.c)에서 `setup_log_buf` 함수의 호출을 볼 수 있습니다.
+
+`setup_log_buf` 함수는 커널 순환 버퍼를 설정하고, 그 길이는 `CONFIG_LOG_BUF_SHIFT` 구성 옵션에 따라 다릅니다. `CONFIG_LOG_BUF_SHIFT`의 문서에서 읽을 수 있듯이 `12` 와 `21`사이에 있을 것입니다. 내부에서 버퍼는 char형 배열로 정의됩니다. :
 
 ```C
 #define __LOG_BUF_LEN (1 << CONFIG_LOG_BUF_SHIFT)
@@ -14,25 +15,25 @@ static char __log_buf[__LOG_BUF_LEN] __aligned(LOG_ALIGN);
 static char *log_buf = __log_buf;
 ```
 
-Now let's look on the implementation of the `setup_log_buf` function. It starts with check that current buffer is empty (It must be empty, because we just setup it) and another check that it is early setup. If setup of the kernel log buffer is not early, we call the `log_buf_add_cpu` function which increase size of the buffer for every CPU:
+이제 setup_log_buf 함수의 구현을 살펴 봅시다. 현재 버퍼가 비어 있는지 확인하고 (단지 설정만 했기 때문에 비어 있어야 함) 다른 설정은 초기 설정인지 확인합니다. 커널 로그 버퍼 설정이 초기가 아닌 경우, 우리는 `log_buf_add_cpu` 함수를 호출하여 모든 CPU의 버퍼 크기를 증가시킵니다. :
 
 ```C
 if (log_buf != __log_buf)
     return;
- 
+
 if (!early && !new_log_buf_len)
     log_buf_add_cpu();
 ```
 
-We will not research `log_buf_add_cpu` function, because as you can see in the `setup_arch`, we call `setup_log_buf` as:
+`setup_arch`에서 볼 수 있기 때문에 `log_buf_add_cpu` 함수는 알아보지 않고, `setup_log_buf`를 다음과 같이 호출합니다. :
 
 ```C
 setup_log_buf(1);
 ```
 
-where `1` means that it is early setup. In the next step we check `new_log_buf_len` variable which is updated length of the kernel log buffer and allocate new space for the buffer with the `memblock_virt_alloc` function for it, or just return.
+여기서 `1`은 초기 설정임을 의미합니다. 다음 단계에서는 커널 로그 버퍼의 길이가 업데이트되는 `new_log_buf_len` 변수를 확인하고 `memblock_virt_alloc` 함수를 통해 버퍼에 새 공간을 할당하거나 리턴합니다.
 
-As kernel log buffer is ready, the next function is `reserve_initrd`. You can remember that we already called the `early_reserve_initrd` function in the fourth part of the [Kernel initialization](https://0xax.gitbooks.io/linux-insides/content/Initialization/linux-initialization-4.html). Now, as we reconstructed direct memory mapping in the `init_mem_mapping` function, we need to move [initrd](http://en.wikipedia.org/wiki/Initrd) into directly mapped memory. The `reserve_initrd` function starts from the definition of the base address and end address of the `initrd` and check that `initrd` is provided by a bootloader. All the same as what we saw in the `early_reserve_initrd`. But instead of the reserving place in the `memblock` area with the call of the `memblock_reserve` function, we get the mapped size of the direct memory area and check that the size of the `initrd` is not greater than this area with:
+커널 로그 버퍼가 준비되면 다음 함수는 'reserve_initrd'입니다. [커널 초기화. part 4.](https://junsoolee.gitbook.io/linux-insides-ko/summary/initialization/linux-initialization-4)에서 이미 `early_reserve_initrd` 함수를 호출했습니다. 이제 우리는 `init_mem_mapping` 함수에서 직접 메모리 매핑을 재구성함에 따라 [initrd](http://en.wikipedia.org/wiki/Initrd)를 직접 매핑 된 메모리로 옮겨야합니다. `reserve_initrd` 함수는 `initrd`의 베이스 주소와 종료 주소의 정의에서 시작하여 부트 로더가 `initrd`를 제공하는지도 확인합니다. 우리가 `early_reserve_initrd` 에서 본 것과 동일합니다. 그러나 `memblock_reserve` 함수를 호출하여 `memblock` 영역의 예약된 영역 대신에, 직접 메모리 영역의 매핑 된 크기를 가져 와서 'initrd'의 크기가 이 영역보다 크지 않은지 확인합니다. :
 
 ```C
 mapped_size = memblock_mem_size(max_pfn_mapped);
@@ -41,14 +42,15 @@ if (ramdisk_size >= (mapped_size>>1))
 	      "disabling initrd (%lld needed, %lld available)\n",
 	      ramdisk_size, mapped_size>>1);
 ```
-          
-You can see here that we call `memblock_mem_size` function and pass the `max_pfn_mapped` to it, where `max_pfn_mapped` contains the highest direct mapped page frame number. If you do not remember what is `page frame number`, explanation is simple: First `12` bits of the virtual address represent offset in the physical page or page frame. If we right-shift out `12` bits of the virtual address, we'll discard offset part and will get `Page Frame Number`. In the `memblock_mem_size` we go through the all memblock `mem` (not reserved) regions and calculates size of the mapped pages and return it to the `mapped_size` variable (see code above). As we got amount of the direct mapped memory, we check that size of the `initrd` is not greater than mapped pages. If it is greater we just call `panic` which halts the system and prints famous [Kernel panic](http://en.wikipedia.org/wiki/Kernel_panic) message. In the next step we print information about the `initrd` size. We can see the result of this in the `dmesg` output:
+
+
+여기서 우리는 `memblock_mem_size` 함수를 호출하고 `max_pfn_mapped`를 함수에 전달합니다. 여기서 max_pfn_mapped는 가장 높은 직접 매핑 된 페이지 프레임 번호를 포함합니다. `페이지 프레임 번호`가 무엇인지 기억하지 못할 수 있으니 간단히 설명합니다. 가상 주소의 첫 번째 12 비트는 실제 페이지 또는 페이지 프레임의 오프셋을 나타냅니다. 가상 주소의 `12` 비트를 오른쪽으로 쉬프트하면 오프셋 부분은 버리고 `Page Frame Number`를 얻게됩니다. `memblock_mem_size`에서 우리는 모든 memblock `mem`(예약되지 않음) 영역을 거쳐 매핑 된 페이지의 크기를 계산하여 `mapped_size` 변수로 반환합니다 (위 코드 참조). 직접 매핑 된 메모리의 크기를 얻었으므로 'initrd'의 크기가 매핑 된 페이지보다 크지 않은지 확인합니다. 더 큰 경우 시스템을 정지시키고 유명한 [Kernel panic](http://en.wikipedia.org/wiki/Kernel_panic) 메시지를 출력하는 `panic`을 호출합니다. 다음 단계에서는 'initrd' 크기에 대한 정보를 출력합니다. `dmesg` 출력에서 이 결과를 볼 수 있습니다. :
 
 ```C
 [0.000000] RAMDISK: [mem 0x36d20000-0x37687fff]
 ```
 
-and relocate `initrd` to the direct mapping area with the `relocate_initrd` function. In the start of the `relocate_initrd` function we try to find a free area with the `memblock_find_in_range` function:
+그리고 `relocate_initrd` 함수를 통해 `initrd`를 직접 매핑 영역으로 재할당합니다. `relocate_initrd` 함수의 시작에서 우리는 `memblock_find_in_range` 함수를 이용하여 빈 영역을 찾습니다. :
 
 ```C
 relocated_ramdisk = memblock_find_in_range(0, PFN_PHYS(max_pfn_mapped), area_size, PAGE_SIZE);
@@ -58,17 +60,18 @@ if (!relocated_ramdisk)
 	       ramdisk_size);
 ```
 
-The `memblock_find_in_range` function tries to find a free area in a given range, in our case from `0` to the maximum mapped physical address and size must equal to the aligned size of the `initrd`. If we didn't find a area with the given size, we call `panic` again. If all is good, we start to relocated RAM disk to the down of the directly mapped memory in the next step.
+`memblock_find_in_range` 함수는 주어진 범위에서 사용 가능한 영역을 찾으려고 시도합니다. 이 경우 `0`부터 최대 매핑 된 물리적 주소와 크기까지는 `initrd`의 정렬 된 크기와 같아야합니다. 주어진 크기의 영역을 찾지 못하면 다시 `panic`을 호출합니다. 모든 것이 정상적이라면, 다음 단계에서 RAM 디스크를 직접 매핑 된 메모리의 밑으로 이동시키기 시작합니다.
 
-In the end of the `reserve_initrd` function, we free memblock memory which occupied by the ramdisk with the call of the:
+`reserve_initrd` 함수의 끝에서, 우리는 다음을 호출하여 램 디스크가 차지했던 memblock 메모리를 해제합니다 :
 
 ```C
 memblock_free(ramdisk_image, ramdisk_end - ramdisk_image);
 ```
 
-After we relocated `initrd` ramdisk image, the next function is `vsmp_init` from the [arch/x86/kernel/vsmp_64.c](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/arch/x86/kernel/vsmp_64.c). This function initializes support of the `ScaleMP vSMP`. As I already wrote in the previous parts, this chapter will not cover non-related `x86_64` initialization parts (for example as the current or `ACPI`, etc.). So we will skip implementation of this for now and will back to it in the part which cover techniques of parallel computing.
+램 디스크 이미지 `initrd` 를 재할당 한 후 다음 함수는 [arch/x86/kernel/vsmp_64.c](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/arch/x86/kernel/vsmp_64.c)의 `vsmp_init`입니다. 이 함수는 'ScaleMP vSMP'의 서포트를 초기화합니다. 이전 부분에서 언급했듯이 이 챕터에서는 관련이없는 `x86_64` 초기화 부분 (예 : 지금의 부분 또는 `ACPI`등)을 다루지 않습니다. 따라서 지금은 이 구현을 건너 뛰고 병렬 컴퓨팅 기술을 다루는 부분으로 가겠습니다.
 
-The next function is `io_delay_init` from the [arch/x86/kernel/io_delay.c](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/arch/x86/kernel/io_delay.c). This function allows to override default I/O delay `0x80` port. We already saw I/O delay in the [Last preparation before transition into protected mode](https://0xax.gitbooks.io/linux-insides/content/Booting/linux-bootstrap-3.html), now let's look on the `io_delay_init` implementation:
+다음 함수는 [arch/x86/kernel/io_delay.c](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/arch/x86/kernel/io_delay.c)의 `io_delay_init`입니다. 이 함수를 사용하면 기본 I/O 지연 `0x80` 포트를 오버라이드할 수 있습니다. 우리는 이미 [보호 모드로 전환하기 전 마지막 준비](https://junsoolee.gitbook.io/linux-insides-ko/summary/booting/linux-bootstrap-3)에서 I/O 지연을 보았습니다. 이제 `io_delay_init` 구현을 살펴봅시다. :
+
 
 ```C
 void __init io_delay_init(void)
@@ -78,7 +81,7 @@ void __init io_delay_init(void)
 }
 ```
 
-This function check `io_delay_override` variable and overrides I/O delay port if `io_delay_override` is set. We can set `io_delay_override` variably by passing `io_delay` option to the kernel command line. As we can read from the [Documentation/kernel-parameters.txt](https://github.com/torvalds/linux/blob/master/Documentation/admin-guide/kernel-parameters.rst), `io_delay` option is:
+이 함수는 `io_delay_override` 변수를 확인하고 `io_delay_override`가 설정된 경우 I/O 지연 포트를 오버라이드합니다. 커널 명령 행에 `io_delay` 옵션을 전달하여 `io_delay_override`를 가변적으로 설정할 수 있습니다. [Documentation/kernel-parameters.txt](https://github.com/torvalds/linux/blob/master/Documentation/admin-guide/kernel-parameters.rst)에서 읽을 수있는 `io_delay` 옵션은 다음과 같습니다. :
 
 ```
 io_delay=	[X86] I/O delay method
@@ -92,13 +95,12 @@ io_delay=	[X86] I/O delay method
         No delay
 ```
 
-We can see `io_delay` command line parameter setup with the `early_param` macro in the [arch/x86/kernel/io_delay.c](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/arch/x86/kernel/io_delay.c)
+우리는 `io_delay` 커맨드라인 파라미터가 `early_param` 매크로를 설정한다는 것을 [arch/x86/kernel/io_delay.c](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/arch/x86/kernel/io_delay.c)에서 볼 수 있습니다.
 
 ```C
 early_param("io_delay", io_delay_param);
 ```
-
-More about `early_param` you can read in the previous [part](https://0xax.gitbooks.io/linux-insides/content/Initialization/linux-initialization-6.html). So the `io_delay_param` function which setups `io_delay_override` variable will be called in the [do_early_param](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/init/main.c#L413) function. `io_delay_param` function gets the argument of the `io_delay` kernel command line parameter and sets `io_delay_type` depends on it:
+`early_param`에 대한 자세한 내용은 이전 [파트]https://junsoolee.gitbook.io/linux-insides-ko/summary/initialization/linux-initialization-6에서 읽을 수 있습니다. 이에 따라 [io_delay_override](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/init/main.c#L413) 변수를 설정하는 `io_delay_param` 함수는 [do_early_param] 함수에서 호출됩니다. `io_delay_param` 함수는 `io_delay` 커널 명령 행 매개 변수의 인수를 가져오고 `io_delay_type`을 설정합니다 :
 
 ```C
 static int __init io_delay_param(char *s)
@@ -122,12 +124,12 @@ static int __init io_delay_param(char *s)
 }
 ```
 
-The next functions are `acpi_boot_table_init`, `early_acpi_boot_init` and `initmem_init` after the `io_delay_init`, but as I wrote above we will not cover [ACPI](http://en.wikipedia.org/wiki/Advanced_Configuration_and_Power_Interface) related stuff in this `Linux Kernel initialization process` chapter.
+다음 함수는 `io_delay_init` 후의 `acpi_boot_table_init`, `early_acpi_boot_init`, `initmem_init`입니다. 그러나 위에서 언급 한 것처럼 이 `Linux 커널 초기화 프로세스' 챕터에서 [ACPI](http://en.wikipedia.org/wiki/Advanced_Configuration_and_Power_Interface) 관련 내용은 다루지 않습니다.
 
-Allocate area for DMA
+DMA를 위한 영역 할당
 --------------------------------------------------------------------------------
 
-In the next step we need to allocate area for the [Direct memory access](http://en.wikipedia.org/wiki/Direct_memory_access) with the `dma_contiguous_reserve` function which is defined in the [drivers/base/dma-contiguous.c](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/drivers/base/dma-contiguous.c). `DMA` is a special mode when devices communicate with memory without CPU. Note that we pass one parameter - `max_pfn_mapped << PAGE_SHIFT`, to the `dma_contiguous_reserve` function and as you can understand from this expression, this is limit of the reserved memory. Let's look on the implementation of this function. It starts from the definition of the following variables:
+다음 단계에서는 [drivers/base/dma-contiguous.c](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/drivers/base/dma-contiguous.c)에 정의 된 `dma_contiguous_reserve` 함수를 사용하여 [직접 메모리 액세스](http://en.wikipedia.org/wiki/Direct_memory_access)에 대한 영역을  할당해야합니다. `DMA`는 장치가 CPU없이 메모리와 통신 할 때의 특수한 모드입니다. 파라미터 하나 -  max_pfn_mapped << PAGE_SHIFT 를 `dma_contiguous_reserve` 함수에 전달한다는 것에 주목해봅시다. 이 표현에서 알 수 있듯이 이것은 예약 된 메모리의 리미트입니다. 이 함수의 구현을 살펴 봅시다. 다음 변수의 정의에서 시작합니다. :
 
 ```C
 phys_addr_t selected_size = 0;
@@ -136,7 +138,7 @@ phys_addr_t selected_limit = limit;
 bool fixed = false;
 ```
 
-where first represents size in bytes of the reserved area, second is base address of the reserved area, third is end address of the reserved area and the last `fixed` parameter shows where to place reserved area. If `fixed` is `1` we just reserve area with the `memblock_reserve`, if it is `0` we allocate space with the `kmemleak_alloc`. In the next step we check `size_cmdline` variable and if it is not equal to `-1` we fill all variables which you can see above with the values from the `cma` kernel command line parameter:
+여기서 첫 번째는 예약 된 영역의 크기를 바이트 단위로 나타내고, 두 번째는 예약 된 영역의 기본 주소이고, 세 번째는 예약 된 영역의 종료 주소이며 마지막 'fixed' 매개 변수는 예약 된 영역을 배치 할 위치를 나타냅니다. `fixed`가 `1`이면 `memblock_reserve`로 영역을 예약하고,`0`이면 `kmemleak_alloc`으로 영역을 할당합니다. 다음 단계에서 우리는 `size_cmdline` 변수를 확인하고 그것이 '-1'이 아닌 경우 위에서 볼 수있는 모든 변수를 `cma` 커널 커맨들 라인 매개 변수의 값으로 채웁니다 :
 
 ```C
 if (size_cmdline != -1) {
@@ -146,13 +148,13 @@ if (size_cmdline != -1) {
 }
 ```
 
-You can find in this source code file definition of the early parameter:
+이 소스 코드 파일에서 초기 매개 변수의 정의를 찾을 수 있습니다. :
 
 ```C
 early_param("cma", early_cma);
 ```
 
-where `cma` is:
+`cma` :
 
 ```
 cma=nn[MG]@[start[MG][-end[MG]]]
@@ -165,23 +167,26 @@ cma=nn[MG]@[start[MG][-end[MG]]]
 		include/linux/dma-contiguous.h
 ```
 
-If we will not pass `cma` option to the kernel command line, `size_cmdline` will be equal to `-1`. In this way we need to calculate size of the reserved area which depends on the following kernel configuration options:
+`cma` 옵션을 커널 명령 행에 전달하지 않으면 `size_cmdline`은 `-1`과 같습니다. 이런 식으로 다음 커널 구성 옵션에 따라 예약 영역의 크기를 계산해야합니다. :
 
-* `CONFIG_CMA_SIZE_SEL_MBYTES` - size in megabytes, default global `CMA` area, which is equal to `CMA_SIZE_MBYTES * SZ_1M` or `CONFIG_CMA_SIZE_MBYTES * 1M`;
-* `CONFIG_CMA_SIZE_SEL_PERCENTAGE` - percentage of total memory;
-* `CONFIG_CMA_SIZE_SEL_MIN` - use lower value;
-* `CONFIG_CMA_SIZE_SEL_MAX` - use higher value.
+* `CONFIG_CMA_SIZE_SEL_MBYTES` - `CMA_SIZE_MBYTES * SZ_1M` or `CONFIG_CMA_SIZE_MBYTES * 1M`와 동일한 메가바이트의 크기와 디폴트 전역 `CMA` 영역.
+* `CONFIG_CMA_SIZE_SEL_PERCENTAGE` - 전체 메모리의 비율;
+* `CONFIG_CMA_SIZE_SEL_MIN` - 더 낮은 값 사용;
+* `CONFIG_CMA_SIZE_SEL_MAX` - 더 높은 값 사용.
 
-As we calculated the size of the reserved area, we reserve area with the call of the `dma_contiguous_reserve_area` function which first of all calls:
+예약 영역의 크기를 계산할 때, 먼저 다음의 함수를 호출하는 `dma_contiguous_reserve_area` 함수를 호출하여 영역을 예약합니다. :
 
 ```
 ret = cma_declare_contiguous(base, size, limit, 0, 0, fixed, res_cma);
 ```
 
-function. The `cma_declare_contiguous` reserves contiguous area from the given base address with given size. After we reserved area for the `DMA`, next function is the `memblock_find_dma_reserve`. As you can understand from its name, this function counts the reserved pages in the `DMA` area. This part will not cover all details of the `CMA` and `DMA`, because they are big. We will see much more details in the special part in the Linux Kernel Memory management which covers contiguous memory allocators and areas.
+`cma_declare_contiguous`는 주어진 베이스 주소에서 주어진 크기를 이용해 연속 된 영역을 예약합니다. DMA를 위한 영역을 예약한 다음 함수는 `memblock_find_dma_reserve` 입니다. 이름에서 알 수 있듯이 이 함수는 DMA 영역에서 예약 된 페이지를 계산합니다. 지금 파트는 CMA 및 DMA에 대한 모든 세부 사항을 다루지는 않습니다. Linux 커널 메모리 관리안에 있는 특수한 파트에서 인접 메모리 할당자와 그 영역을 다루는 훨씬 더 자세한 내용을 볼 수 있습니다.
 
-Initialization of the sparse memory
+
+sparce 메모리의 초기화
 --------------------------------------------------------------------------------
+
+다음 단계는 `x86_init.paging.pagetable_init` 함수 호출입니다. Linux 커널 소스 코드에서 이 기능을 찾고자한다면, 검색이 끝날 때 다음 매크로를 볼 수 있습니다. :
 
 The next step is the call of the function - `x86_init.paging.pagetable_init`. If you try to find this function in the linux kernel source code, in the end of your search, you will see the following macro:
 
@@ -189,7 +194,7 @@ The next step is the call of the function - `x86_init.paging.pagetable_init`. If
 #define native_pagetable_init        paging_init
 ```
 
-which expands as you can see to the call of the `paging_init` function from the [arch/x86/mm/init_64.c](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/arch/x86/mm/init_64.c). The `paging_init` function initializes sparse memory and zone sizes. First of all what's zones and what is it `Sparsemem`. The `Sparsemem` is a special foundation in the linux kernel memory manager which used to split memory area into different memory banks in the [NUMA](http://en.wikipedia.org/wiki/Non-uniform_memory_access) systems. Let's look on the implementation of the `paginig_init` function:
+이것은 [arch/x86/mm/init_64.c](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/arch/x86/mm/init_64.c)에서 `paging_init` 함수의 호출을 볼 수 있듯이 확장됩니다. `paging_init` 함수는 스파스 메모리와 존 크기를 초기화합니다. 존은 무엇이고 무엇이 `Sparsemem`은 무엇일까요? `Sparsemem`은 [NUMA](http://en.wikipedia.org/wiki/Non-uniform_memory_access) 시스템에서 메모리 영역을 다른 메모리 뱅크로 분할하는 데 사용되는 Linux 커널 메모리 관리자의 특수한 기반입니다. `paginig_init` 함수의 구현을 살펴봅시다. :
 
 ```C
 void __init paging_init(void)
@@ -205,14 +210,14 @@ void __init paging_init(void)
 }
 ```
 
-As you can see there is call of the `sparse_memory_present_with_active_regions` function which records a memory area for every `NUMA` node to the array of the `mem_section` structure which contains a pointer to the structure of the array of `struct page`. The next `sparse_init` function allocates non-linear `mem_section` and `mem_map`. In the next step we clear state of the movable memory nodes and initialize sizes of zones. Every `NUMA` node is divided into a number of pieces which are called - `zones`. So, `zone_sizes_init` function from the [arch/x86/mm/init.c](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/arch/x86/mm/init.c) initializes size of zones.
+보다시피 `struct page` 배열의 구조체에 대한 포인터를 포함하는 `mem_section` 구조체 배열에 대한 모든 'NUMA'노드의 메모리 영역을 기록하는 `sparse_memory_present_with_active_regions` 함수의 호출이 있습니다. 다음 `sparse_init` 함수는 비선형 `mem_section`와 `mem_map`을 할당합니다. 다음 단계에서 이동식 메모리 노드의 상태를 지우고 영역의 크기를 초기화합니다. 모든 `NUMA` 노드는 'zones'라고 불리는 여러 조각으로 나뉩니다. 따라서 [arch/x86/mm/init.c](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/arch/x86/mm/init.c)의 `zone_sizes_init` 함수는 존의 크기를 초기화합니다.
 
-Again, this part and next parts do not cover this theme in full details. There will be special part about `NUMA`.
+지금 파트와 다음 파트에서는 이 주제를 자세히 다루지 않습니다. NUMA에 대한 특별한 파트는 있을 것입니다.
 
-vsyscall mapping 
+vsyscall 매핑
 --------------------------------------------------------------------------------
 
-The next step after `SparseMem` initialization is setting of the `trampoline_cr4_features` which must contain content of the `cr4` [Control register](http://en.wikipedia.org/wiki/Control_register). First of all we need to check that current CPU has support of the `cr4` register and if it has, we save its content to the `trampoline_cr4_features` which is storage for `cr4` in the real mode:
+`SparseMem` 초기화 이후에 다음 단계는 `cr4` [Control register] (http://en.wikipedia.org/wiki/Control_register)의 내용을 포함해야하는 `trampoline_cr4_features`의 설정입니다. 우선 우리는 현재 CPU가 `cr4` 레지스터를 지원하는지 확인해야하고 만약 있다면, 리얼 모드에서 `cr4`를 저장하는 `trampoline_cr4_features`에 내용을 저장합니다 :
 
 ```C
 if (boot_cpu_data.cpuid_level >= 0) {
@@ -222,7 +227,7 @@ if (boot_cpu_data.cpuid_level >= 0) {
 }
 ```
 
-The next function which you can see is `map_vsyscal` from the [arch/x86/kernel/vsyscall_64.c](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/arch/x86/kernel/vsyscall_64.c). This function maps memory space for [vsyscalls](https://lwn.net/Articles/446528/) and depends on `CONFIG_X86_VSYSCALL_EMULATION` kernel configuration option. Actually `vsyscall` is a special segment which provides fast access to the certain system calls like `getcpu`, etc. Let's look on implementation of this function:
+다음으로 살펴 볼 함수는 [arch/x86/kernel/vsyscall_64.c](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/arch/x86/kernel/vsyscall_64.c)의 `map_vsyscal`입니다. 이 함수는 [vsyscalls](https://lwn.net/Articles/446528/)의 메모리 공간을 매핑하며 `CONFIG_X86_VSYSCALL_EMULATION` 커널 구성 옵션에 따라 다릅니다. 실제로 `vsyscall`은 `getcpu`와 같은 특정 시스템 호출에 빠르게 액세스 할 수있는 특수 세그먼트입니다. 이 함수의 구현을 살펴 보겠습니다. :
 
 ```C
 void __init map_vsyscall(void)
@@ -241,7 +246,7 @@ void __init map_vsyscall(void)
 }
 ```
 
-In the beginning of the `map_vsyscall` we can see definition of two variables. The first is extern variable `__vsyscall_page`. As a extern variable, it defined somewhere in other source code file. Actually we can see definition of the `__vsyscall_page` in the [arch/x86/kernel/vsyscall_emu_64.S](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/arch/x86/kernel/vsyscall_emu_64.S). The `__vsyscall_page` symbol points to the aligned calls of the `vsyscalls` as `gettimeofday`, etc.:
+`map_vsyscall `의 시작 부분에서 우리는 두 변수의 정의를 볼 수 있습니다. 첫 번째는 extern 변수인 `__vsyscall_page`입니다. extern 변수로서 다른 소스 코드 파일 어딘가에 정의되었습니다. 실제로 우리는 [arch/x86/kernel/vsyscall_emu_64.S](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/arch/x86/kernel/vsyscall_emu_64.S)에서 `__vsyscall_page`의 정의를 볼 수 있습니다. `__vsyscall_page` 심볼은 `vsyscalls`의 정렬 된 호출을 `gettimeofday` 등으로 가리 킵니다. :
 
 ```assembly
 	.globl __vsyscall_page
@@ -262,13 +267,13 @@ __vsyscall_page:
     ...
 ```
 
-The second variable is `physaddr_vsyscall` which just stores physical address of the `__vsyscall_page` symbol. In the next step we check the `vsyscall_mode` variable, and if it is not equal to `NONE`, it is `EMULATE` by default:
+두 번째 변수는 `physaddr_vsyscall`이며 `__vsyscall_page` 심볼의 물리적 주소만 저장합니다. 다음 단계에서 우리는 `vsyscall_mode` 변수를 확인하고, 이때 `NONE`이 아니라면 기본적으로 `EMULATE`입니다. :
 
 ```C
 static enum { EMULATE, NATIVE, NONE } vsyscall_mode = EMULATE;
 ```
 
-And after this check we can see the call of the `__set_fixmap` function which calls `native_set_fixmap` with the same parameters:
+그리고 이 확인 후에 동일한 매개 변수로 `native_set_fixmap`을 호출하는 `__set_fixmap` 함수의 호출을 볼 수 있습니다.
 
 ```C
 void native_set_fixmap(enum fixed_addresses idx, unsigned long phys, pgprot_t flags)
@@ -289,52 +294,53 @@ void __native_set_fixmap(enum fixed_addresses idx, pte_t pte)
 }
 ```
 
-Here we can see that `native_set_fixmap` makes value of `Page Table Entry` from the given physical address (physical address of the `__vsyscall_page` symbol in our case) and calls internal function - `__native_set_fixmap`. Internal function gets the virtual address of the given `fixed_addresses` index (`VSYSCALL_PAGE` in our case) and checks that given index is not greater than end of the fix-mapped addresses. After this we set page table entry with the call of the `set_pte_vaddr` function and increase count of the fix-mapped addresses. And in the end of the `map_vsyscall` we check that virtual address of the `VSYSCALL_PAGE` (which is first index in the `fixed_addresses`) is not greater than `VSYSCALL_ADDR` which is `-10UL << 20` or `ffffffffff600000` with the `BUILD_BUG_ON` macro:
+여기서 우리는 `native_set_fixmap`가 주어진 물리적 주소(여기서는 `__vsyscall_page` 심볼의 물리적 주소)에서 `Page Table Entry`의 값을 만들고, 내부 함수인 `__native_set_fixmap`을 호출한다는 것을 알 수 있습니다. 내부 함수는 주어진 `fixed_addresses` 인덱스 (여기서는 `VSYSCALL_PAGE`)의 가상 주소를 가져오고 주어진 인덱스가 수정-매핑 된 주소의 끝보다 크지 않은지 확인합니다. 그런 다음 `set_pte_vaddr` 함수를 호출하여 페이지 테이블 항목을 설정하고 수정 매핑 된 주소의 수를 늘립니다. 그리고 `map_vsyscall`의 끝에서 우리는 `VSYSCALL_PAGE`의 가상 주소 (`fixed_addresses`의 첫 번째 인덱스)가 `-10UL << 20` 또는 `ffffffffff600000`인 VSYSCALL_ADDR보다 크지 않은지 `BUILD_BUG_ON` 매크로로 확인합니다. :
 
 ```C
 BUILD_BUG_ON((unsigned long)__fix_to_virt(VSYSCALL_PAGE) !=
                      (unsigned long)VSYSCALL_ADDR);
 ```
 
-Now `vsyscall` area is in the `fix-mapped` area. That's all about `map_vsyscall`, if you do not know anything about fix-mapped addresses, you can read [Fix-Mapped Addresses and ioremap](https://0xax.gitbooks.io/linux-insides/content/MM/linux-mm-2.html). We will see more about `vsyscalls` in the `vsyscalls and vdso` part.
+이제 `vsyscall`영역은 `fix-mapped`영역에 위치합니다. 수정 된 주소에 대해 아무것도 모르는 경우 [Fix-Mapped Addresses and ioremap] (https://0xax.gitbooks.io/linux-insides/content/MM/linux-mm-2.html)에서 읽을 수 있습니다. 우리는 `vsyscalls 와 vdso` 부분에서 `vsyscalls`에 대해 더 많이 볼 것입니다.
 
-Getting the SMP configuration
+SMP의 설정 얻기
 --------------------------------------------------------------------------------
 
-You may remember how we made a search of the [SMP](http://en.wikipedia.org/wiki/Symmetric_multiprocessing) configuration in the previous [part](https://0xax.gitbooks.io/linux-insides/content/Initialization/linux-initialization-6.html). Now we need to get the `SMP` configuration if we found it. For this we check `smp_found_config` variable which we set in the `smp_scan_config` function (read about it the previous part) and call the `get_smp_config` function:
+이전 [파트](https://junsoolee.gitbook.io/linux-insides-ko/summary/initialization/linux-initialization-6)에서 [SMP](http://en.wikipedia.org/wiki/Symmetric_multiprocessing) 설정을 검색 하는 방법을 알았습니다. 이제 찾은 `SMP`의 설정이 필요합니다. 이를 위해 우리는 `smp_scan_config` 함수에서 설정 한 `smp_found_config` 변수를 검사하고(이전 파트 참고) `get_smp_config` 함수를 호출합니다 :
 
 ```C
 if (smp_found_config)
 	get_smp_config();
 ```
 
-The `get_smp_config` expands to the `x86_init.mpparse.default_get_smp_config` function which is defined in the [arch/x86/kernel/mpparse.c](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/arch/x86/kernel/mpparse.c). This function defines a pointer to the multiprocessor floating pointer structure - `mpf_intel` (you can read about it in the previous [part](https://0xax.gitbooks.io/linux-insides/content/Initialization/linux-initialization-6.html)) and does some checks:
+`get_smp_config`는 [arch/x86/kernel/mpparse.c](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/arch/x86/kernel/mpparse.c)에 정의 된`x86_init.mpparse.default_get_smp_config` 함수로 확장됩니다. 이 함수는 멀티 프로세서 플로팅 포인터 구조체인 `mpf_intel`에 대한 포인터를 정의하고(이전 [파트](https://junsoolee.gitbook.io/linux-insides-ko/summary/initialization/linux-initialization-6)에서 읽을 수 있음) 몇 가지 검사를 수행합니다. :
 
 ```C
 struct mpf_intel *mpf = mpf_found;
 
 if (!mpf)
     return;
- 
+
 if (acpi_lapic && early)
    return;
 ```
 
-Here we can see that multiprocessor configuration was found in the `smp_scan_config` function or just return from the function if not. The next check is `acpi_lapic` and `early`. And as we did this checks, we start to read the `SMP` configuration. As we finished reading it, the next step is - `prefill_possible_map` function which makes preliminary filling of the possible CPU's `cpumask` (more about it you can read in the [Introduction to the cpumasks](https://0xax.gitbooks.io/linux-insides/content/Concepts/linux-cpu-2.html)).
+여기서 우리는 멀티 프로세서 설정이 `smp_scan_config` 함수에서 발견되거나, 그렇지 않은 경우 그 함수의 리턴에서 볼 수 있습니다. 다음으로 확인할 것은 `acpi_lapic`과 `early`입니다. 그리고 이 검사를 수행하면서 `SMP` 설정을 읽기 시작합니다. 읽은 후, 다음 단계에서 `prefill_possible_map` 함수로 CPU의 `cpumask '를 미리 채웁니다(자세한 내용은 [cpumasks 소개](https://junsoolee.gitbook.io/linux-insides-ko/summary/concepts/linux-cpu-2)에서 읽을 수 있습니다).
 
-The rest of the setup_arch
+
+setup_arch의 나머지
 --------------------------------------------------------------------------------
 
-Here we are getting to the end of the `setup_arch` function. The rest of function of course is important, but details about these stuff will not will not be included in this part. We will just take a short look on these functions, because although they are important as I wrote above, but they cover non-generic kernel features related with the `NUMA`, `SMP`, `ACPI` and `APICs`, etc. First of all, the next call of the `init_apic_mappings` function. As we can understand this function sets the address of the local [APIC](http://en.wikipedia.org/wiki/Advanced_Programmable_Interrupt_Controller). The next is `x86_io_apic_ops.init` and this function initializes I/O APIC. Please note that we will see all details related with `APIC` in the chapter about interrupts and exceptions handling. In the next step we reserve standard I/O resources like `DMA`, `TIMER`, `FPU`, etc., with the call of the `x86_init.resources.reserve_resources` function. Following is `mcheck_init` function initializes `Machine check Exception` and the last is `register_refined_jiffies` which registers [jiffy](http://en.wikipedia.org/wiki/Jiffy_%28time%29) (There will be separate chapter about timers in the kernel).
+여기서 우리는 `setup_arch` 함수의 끝을 얻었습니다. 나머지 함수도 물론 중요하지만 이러한 내용에 대한 자세한 내용은 지금 파트에 포함되지 않습니다. 위에서 언급 한대로 중요하긴하지만 `NUMA`, `SMP`, `ACPI`, `APIC` 등과 관련된 제네릭이 아닌 커널 함수들이기 때문에, 이러한 함수에 대해서는 간단히만 살펴 보겠습니다. 우선, 다음에 `init_apic_mappings` 함수를 호출합니다. 우리가 알고 있듯이 이 함수는 로컬 [APIC](http://en.wikipedia.org/wiki/Advanced_Programmable_Interrupt_Controller)의 주소를 설정합니다. 다음 함수는 `x86_io_apic_ops.init`이며, 이 함수는 I/O APIC를 초기화합니다.인터럽트 및 예외 처리에 관한 챕터에서 APIC와 관련된 모든 세부 사항을 볼 수 있습니다. 다음 단계에서는 `x86_init.resources.reserve_resources` 함수를 호출하여 `DMA`, `TIMER`, `FPU` 등과 같은 표준 I/O 리소스를 예약합니다. 다음은  `Machine check Exception`을 초기화하는 `mcheck_init` 함수이고, 마지막함수는 [jiffy](http://en.wikipedia.org/wiki/Jiffy_%28time%29)를 등록하는`register_refined_jiffies`입니다 (커널의 타이머에 대한 별도의 챕터가 있습니다).
 
-So that's all. Finally we have finished with the big `setup_arch` function in this part. Of course as I already wrote many times, we did not see full details about this function, but do not worry about it. We will be back more than once to this function from different chapters for understanding how different platform-dependent parts are initialized.
+이것이 다입니다. 마지막으로 이 파트에서 큰 `setup_arch` 함수를 마쳤습니다. 물론 이미 여러 번 쓴 것처럼 이 함수에 대한 자세한 내용은 보지 못했지만 걱정하지 않아도됩니다. 플랫폼에 따라 다른 파트가 초기화되는 방법을 이해하기 위해 다른 챕터에서 이 함수로 두 번 이상 돌아올 것입니다.
 
-That's all, and now we can back to the `start_kernel` from the `setup_arch`.
+이것으로 끝났습니다. 이제 우리는`setup_arch에서 `start_kernel`로 돌아갈 수 있습니다. :
 
-Back to the main.c
+main.c로 돌아가서
 ================================================================================
 
-As I wrote above, we have finished with the `setup_arch` function and now we can back to the `start_kernel` function from the [init/main.c](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/init/main.c). As you may remember or saw yourself, `start_kernel` function as big as the `setup_arch`. So the couple of the next part will be dedicated to learning of this function. So, let's continue with it. After the `setup_arch` we can see the call of the `mm_init_cpumask` function. This function sets the [cpumask](https://0xax.gitbooks.io/linux-insides/content/Concepts/linux-cpu-2.html) pointer to the memory descriptor `cpumask`. We can look on its implementation:
+위에서 쓴 것처럼, 우리는`setup_arch` 함수로 끝났고 이제 [init/main.c]의 `start_kernel` 함수로 돌아갈 수 있습니다. `start_kernel`은 `setup_arch`만큼 큰 기능을 한다는 것을 기억할 것입니다. 다음 파트에서는 이 함수를 배우는 데 전념 할 것입니다. `setup_arch` 이후에 `mm_init_cpumask` 함수의 호출을 볼 수 있습니다. 이 함수는 [cpumask](https://junsoolee.gitbook.io/linux-insides-ko/summary/concepts/linux-cpu-2) 포인터를 메모리 디스크립터 `cpumask`로 설정합니다. 함수의 구현에서 살펴볼 수 있습니다. :
 
 ```C
 static inline void mm_init_cpumask(struct mm_struct *mm)
@@ -346,23 +352,23 @@ static inline void mm_init_cpumask(struct mm_struct *mm)
 }
 ```
 
-As you can see in the [init/main.c](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/init/main.c), we pass memory descriptor of the init process to the `mm_init_cpumask` and depends on `CONFIG_CPUMASK_OFFSTACK` configuration option we clear [TLB](http://en.wikipedia.org/wiki/Translation_lookaside_buffer) switch `cpumask`.
+[init/main.c](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/init/main.c)에서 볼 수 있듯이 init 프로세스의 메모리 디스크립터를 `mm_init_cpumask`에 전달합니다. `CONFIG_CPUMASK_OFFSTACK` 설정 옵션에 따라 [TLB](http://en.wikipedia.org/wiki/Translation_lookaside_buffer) 스위치 `cpumask`를 지웁니다.
 
-In the next step we can see the call of the following function:
+다음 단계에서 다음 함수의 호출을 볼 수 있습니다. :
 
 ```C
 setup_command_line(command_line);
 ```
 
-This function takes pointer to the kernel command line allocates a couple of buffers to store command line. We need a couple of buffers, because one buffer used for future reference and accessing to command line and one for parameter parsing. We will allocate space for the following buffers:
+이 함수는 커널 커맨드 라인에 대한 포인터를 가져 와서 커맨드 라인을 저장하기 위한 몇 개의 버퍼를 할당합니다. 버퍼 하나는 나중에 참조하고 커맨드 라인에 엑세스하는 데에 사용되고, 하나는 매개 변수 파싱에 사용되므로 두 개의 버퍼가 필요합니다. 다음 버퍼를 위한 공간을 할당합니다. :
 
-* `saved_command_line` - will contain boot command line;
-* `initcall_command_line` - will contain boot command line. will be used in the `do_initcall_level`;
-* `static_command_line` - will contain command line for parameters parsing.
+* `saved_command_line` - 부팅 커맨드 라인을 포함할 것.
+* `initcall_command_line` - 부팅 커맨드 라인을 포함할 것. `do_initcall_level`에서 사용 될 것.;
+* `static_command_line` - 매개변수 파싱을 위한 커맨드 라인을 포함.
 
-We will allocate space with the `memblock_virt_alloc` function. This function calls `memblock_virt_alloc_try_nid` which allocates boot memory block with `memblock_reserve` if [slab](http://en.wikipedia.org/wiki/Slab_allocation) is not available or uses `kzalloc_node` (more about it will be in the linux memory management chapter). The `memblock_virt_alloc` uses `BOOTMEM_LOW_LIMIT` (physical address of the `(PAGE_OFFSET + 0x1000000)` value) and `BOOTMEM_ALLOC_ACCESSIBLE` (equal to the current value of the `memblock.current_limit`) as minimum address of the memory region and maximum address of the memory region.
+`memblock_virt_alloc` 함수를 사용하여 공간을 할당합니다. 이 함수는 [slab](http://en.wikipedia.org/wiki/Slab_allocation)을 사용할 수 없거나 `kzalloc_node`를 사용하는 경우 `memblock_reserve`로 부팅 메모리 블록을 할당하는 `memblock_virt_alloc_try_nid`를 호출합니다 (자세한 내용은 Linux 메모리 관리 챕터에 있음). `memblock_virt_alloc`은 `BOOTMEM_LOW_LIMIT`(`(PAGE_OFFSET + 0x1000000)`의 물리적 주소) 및 `BOOTMEM_ALLOC_ACCESSIBLE '(`memblock.current_limit`의 현재 값과 동일)을 각각 메모리 영역의 최소 주소 및 최대 주소로 사용합니다.
 
-Let's look on the implementation of the `setup_command_line`:
+`setup_command_line`의 구현을 살펴 봅시다. :
 
 ```C
 static void __init setup_command_line(char *command_line)
@@ -377,9 +383,9 @@ static void __init setup_command_line(char *command_line)
  }
  ```
 
-Here we can see that we allocate space for the three buffers which will contain kernel command line for the different purposes (read above). And as we allocated space, we store `boot_command_line` in the `saved_command_line` and `command_line` (kernel command line from the `setup_arch`) to the `static_command_line`.
+여기서 우리는 다른 목적을 위해 커널 명령 행을 포함할 3 개의 버퍼를 위한 공간을 할당한다는 것을 알 수 있습니다(위에서 읽음). 그리고 공간을 할당 할 때 `boot_command_line`을 `saved_command_line` 및 `command_line` (`setup_arch`의 커널 명령 줄)에`static_command_line`에 저장합니다.
 
-The next function after the `setup_command_line` is the `setup_nr_cpu_ids`. This function setting `nr_cpu_ids` (number of CPUs) according to the last bit in the `cpu_possible_mask` (more about it you can read in the chapter describes [cpumasks](https://0xax.gitbooks.io/linux-insides/content/Concepts/linux-cpu-2.html) concept). Let's look on its implementation:
+`setup_command_line` 다음에 오는 함수는 `setup_nr_cpu_ids`입니다. 이 함수 설정은 `cpu_possible_mask`의 마지막 비트에 따라 'nr_cpu_ids'(CPU 수)를 설정합니다 (자세한 내용은 [cpumasks](https://junsoolee.gitbook.io/linux-insides-ko/summary/concepts/linux-cpu-2) 개념에서 설명합니다). 구현에 대해 살펴 봅시다. :
 
 ```C
 void __init setup_nr_cpu_ids(void)
@@ -388,22 +394,22 @@ void __init setup_nr_cpu_ids(void)
 }
 ```
 
-Here `nr_cpu_ids` represents number of CPUs, `NR_CPUS` represents the maximum number of CPUs which we can set in configuration time:
+CPU들의 수를 나타내는 여기 `nr_cpu_ids`에서,`NR_CPUS`는 설정 시간을 설정할 수 있는 CPU들의 최대 수를 나타냅니다. :
 
 ![CONFIG_NR_CPUS](http://oi59.tinypic.com/28mh45h.jpg)
 
-Actually we need to call this function, because `NR_CPUS` can be greater than actual amount of the CPUs in the your computer. Here we can see that we call `find_last_bit` function and pass two parameters to it:
+NR_CPUS는 컴퓨터의 실제 CPU 수보다 클 수 있으므로 실제로 이 함수를 호출해야합니다. 여기서 우리는 `find_last_bit` 함수를 호출하고 두 개의 매개 변수를 전달하는 것을 볼 수 있습니다 :
 
 * `cpu_possible_mask` bits;
 * maximum number of CPUS.
 
-In the `setup_arch` we can find the call of the `prefill_possible_map` function which calculates and writes to the `cpu_possible_mask` actual number of the CPUs. We call the `find_last_bit` function which takes the address and maximum size to search and returns bit number of the first set bit. We passed `cpu_possible_mask` bits and maximum number of the CPUs. First of all the `find_last_bit` function splits given `unsigned long` address to the [words](http://en.wikipedia.org/wiki/Word_%28computer_architecture%29):
+`setup_arch`에서 CPU의 실제 수인 `cpu_possible_mask`를 계산하고 기록하는 `prefill_possible_map` 함수의 호출을 찾을 수 있습니다. 주소와 최대 크기를 검색하여 첫 번째 설정 비트의 비트 번호를 리턴하는 `find_last_bit` 함수를 호출합니다. 우리는 `cpu_possible_mask` 비트와 최대 CPU 수를 전달했습니다. 먼저 `find_last_bit` 함수는 `signed long`형 주소가 주어지면 [워드](http://en.wikipedia.org/wiki/Word_%28computer_architecture%29)로 분할됩니다. :
 
 ```C
 words = size / BITS_PER_LONG;
 ```
 
-where `BITS_PER_LONG` is `64` on the `x86_64`. As we got amount of words in the given size of the search data, we need to check is given size does not contain partial words with the following check:
+여기서 `BITS_PER_LONG`은 `x86_64`에서 `64`입니다. 주어진 사이즈의 검색 데이터 안에 워드의 수가 있으므로, 크기가 부분 단어를 포함하지는 않는지 다음을 이용하여 확인해야합니다. :
 
 ```C
 if (size & (BITS_PER_LONG-1)) {
@@ -414,14 +420,15 @@ if (size & (BITS_PER_LONG-1)) {
 }
 ```
 
-if it contains partial word, we mask the last word and check it. If the last word is not zero, it means that current word contains at least one set bit. We go to the `found` label:
+부분 단어가 포함 된 경우 마지막 워드를 마스크하고 확인합니다. 마지막 워드가 0이 아니면 현재 단어에 하나 이상의 설정 비트가 포함되어 있음을 의미합니다. 이제 `found` 레이블로 이동합니다. :
+
 
 ```C
 found:
     return words * BITS_PER_LONG + __fls(tmp);
 ```
 
-Here you can see `__fls` function which returns last set bit in a given word with help of the `bsr` instruction:
+다음은 `bsr` 명령어의 도움으로 주어진 워드의 마지막 설정 비트를 리턴하는 `__fls` 함수를 볼 수 있습니다 :
 
 ```C
 static inline unsigned long __fls(unsigned long word)
@@ -433,7 +440,7 @@ static inline unsigned long __fls(unsigned long word)
 }
 ```
 
-The `bsr` instruction which scans the given operand for first bit set. If the last word is not partial we going through the all words in the given address and trying to find first set bit:
+주어진 피연산자를 스캔하여 첫 번째 비트 세트를 찾는 `bsr` 명령어. 마지막 워드가 부분적이지 않으면 주어진 주소의 모든 워드를 살펴보고 첫 번째 설정 비트를 찾습니다. :
 
 ```C
 while (words) {
@@ -445,24 +452,24 @@ found:
 }
 ```
 
-Here we put the last word to the `tmp` variable and check that `tmp` contains at least one set bit. If a set bit found, we return the number of this bit. If no one words do not contains set bit we just return given size:
+여기서 마지막 단어를 `tmp` 변수에 넣고 `tmp`에 적어도 하나의 설정 비트가 포함되어 있는지 확인합니다. 설정된 비트가 발견되면 이 비트 수를 리턴합니다. 한 워드에 설정 비트가 포함되어 있지 않으면 주어진 크기를 반환합니다. :
 
 ```C
 return size;
 ```
 
-After this `nr_cpu_ids` will contain the correct amount of the available CPUs.
+이 후 `nr_cpu_ids`는 사용 가능한 CPU의 정확한 수를 포함하게 됩니다.
 
-That's all.
+끝났습니다.
 
-Conclusion
+결론
 ================================================================================
 
-It is the end of the seventh part about the linux kernel initialization process. In this part, finally we have finished with the `setup_arch` function and returned to the `start_kernel` function. In the next part we will continue to learn generic kernel code from the `start_kernel` and will continue our way to the first `init` process.
+리눅스 커널 초기화 과정에 대한 일곱 번째 부분의 끝입니다. 이 부분에서 마지막으로 `setup_arch` 함수를 끝냈고 `start_kernel` 함수로 돌아 왔습니다. 다음 부분에서는 `start_kernel`에서 일반 커널 코드를 계속 배우고 첫 번째 `init` 프로세스로 계속 진행할 것입니다.
 
-If you have any questions or suggestions write me a comment or ping me at [twitter](https://twitter.com/0xAX).
+질문이나 제안 사항이 있으면 [twitter](https://twitter.com/0xAX)에 의견이나 핑을 남겨주세요.
 
-**Please note that English is not my first language, And I am really sorry for any inconvenience. If you find any mistakes please send me PR to [linux-insides](https://github.com/0xAX/linux-insides).**
+**영어는 제 모국어가 아닙니다. 그리고 여타 불편하셨던 점에 대해서 정말로 사과드립니다. 만약 실수를 찾아내셨다면 부디 [linux-insides 원본](https://github.com/0xAX/linux-internals)으로, 번역에 대해서는 [linux-insides 한글 번역](https://github.com/junsooo/linux-insides-ko)으로 PR을 보내주세요.**
 
 Links
 ================================================================================

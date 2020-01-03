@@ -1,27 +1,32 @@
-리눅스 커널의 타이머 및 시간 관리 제2부
+리눅스 커널에서의 타이머 및 시간 관리.Part 2.
 ================================================================================
 
-클럭소스에 대한 소개
+ `clocksource` 프레임워크 소개
 --------------------------------------------------------------------------------
 
-이전 부분은[part](https://0xax.gitbooks.io/linux-insides/content/Timers/linux-timers-1.html) 현재 장의 첫 부분으로 리눅스 커널의 타이머 및 시간 관리 관련 내용을 설명합니다.[chapter](https://0xax.gitbooks.io/linux-insides/content/Timers/index.html) 우리는 이전 부분에서 두가지 개념에 대해 알게 되었습니다.
+이전 [파트](https://0xax.gitbooks.io/linux-insides/content/Timers/linux-timers-1.html)는 리눅스 커널에서 타이머와 시간 관리에 관련된 것을 설명하는 현재 챕터의 첫 번째 파트였습니다. 우리는 이전 파트에서 두 가지 개념을 알게되었습니다:
+
 
   * `jiffies`
   * `clocksource`
 
-첫 번째는 [include/linux/jiffies.h](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/include/linux/jiffies.h) 헤더 파일에 정의 된 전역 변수이고 각 타이머 인터럽트 동안 증가하는 카운터를 나타냅니다. 따라서 이 전역 변수에 액세스 할 수 있고 타이머 인터럽트 속도를 알고 있다면 `jiffies`를 사람들의 시간 단위로 변환 할 수 있습니다. 컴파일 시간 상수로 대표되는 타이머 인터럽트 속도를 리눅스 커널에서  `HZ` 라고 부르는 것을 이미 알고 있습니다. `HZ`의 값는 CONFIG_HZ의 커널 구성 옵션 값과 동일하며 [arch/x86/configs/x86_64_defconfig](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/arch/x86/configs/x86_64_defconfig) 그 커널 구성 파일을 확인해보겠습니다:
+
+첫 번째는 [include/linux/jiffies.h](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/include/linux/jiffies.h)헤더 파일에서 정의된 전역 변수이며 각 타이머 인터럽트 중 증가되는 카운터를 나타냅니다. 따라서 이 전역 변수에 접근할 수 있고 타이머 인터럽트 속도를 안다면 `jiffies`를 휴면 타임 유닛으로 변환할 수 있습니다. 우리가 이미 알고 있듯이 타이머 인터럽트 속도는 리눅스 커널에서 `HZ`라 불리는 컴파일-타임 상수로 표현됩니다. `HZ`의 값은 `CONFIG_HZ`커널 구성 옵션의 값과 같고 [arch/x86/configs/x86_64_defconfig](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/arch/x86/configs/x86_64_defconfig)커널 구성 파일을 보면, 다음을 볼 수 있습니다:
+
 
 ```
 CONFIG_HZ_1000=y
 ```
 
-커널 구성 옵션은 설정이 되었습니다. 이것은 `CONFIG_HZ` 는 아키텍쳐의 기본값에 의해 `1000` [x86_64](https://en.wikipedia.org/wiki/X86-64)이 된다는 것을 의미합니다. 그래서 만약 우리가 `jiffies`의 값을 `HZ`의 값으로 나눈다면:
+커널 구성 옵션을 설정했습니다. 이것은 `CONFIG_HZ`의 값이 [x86_64](https://en.wikipedia.org/wiki/X86-64)아키텍쳐에 대한 디폴트 `1000`임을 의미합니다. 그래서, `jiffies`의 값을 `HZ`의 값으로 나누면:
+
 
 ```
 jiffies / HZ
 ```
 
-우리는 리눅스 커널이 작동하기 시작했을때부터 경과한 시간(초)나 [uptime](https://en.wikipedia.org/wiki/Uptime), 시스템의 가동시간을 얻습니다. `HZ`는 1초 마다 일어나는 타이머 인터럽트를 표현하므로 우리는 나중에 일어날 일정 시간동안의 값을 설정할수 있습니다. 예를 들어:
+우리는 리눅스 커널이 작동을 시작한 순간부터 경과한 시간을 얻거나 다른 말로 시스템 [업타임](https://en.wikipedia.org/wiki/Uptime)을 얻습니다. `HZ`는 타이머 인터럽트의 양을 초 단위로 나타내므로 앞으로 일정 시간 동안 값을 설정할 수 있습니다. 예시:
+
 
 ```C
 /* one minute from now */
@@ -31,7 +36,8 @@ unsigned long later = jiffies + 60*HZ;
 unsigned long later = jiffies + 5*60*HZ;
 ```
 
-이것은 리눅스에서 매우 기본적인 연습입니다. 예를 들어 만약 당신이 [arch/x86/kernel/smpboot.c](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/arch/x86/kernel/smpboot.c)소스코드 파일을 찾아본다면 당신은 `do_boot_cpu` 함수를 찾을 것입니다. 이 함수는 부트 스트랩 프로세스 이외의 모든 프로세서를 부팅합니다. 당신은 애플리케이션 프로세서의 응답을 10초동안 기다리는 스니펫을 찾을 수 있습니다.
+이것은 리눅스 커널에서 매우 일반적인 일입니다. 예를 들어, [arch/x86/kernel/smpboot.c](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/arch/x86/kernel/smpboot.c)소스 코드 파일을 살펴보면, `do_boot_cpu`함수를 찾을 수 있습니다. 이 함수는 bootstrap프로세서 외에도 모든 프로세서를 부팅합니다. 응용프로그램 프로세서에서 응답을 10초 기다리는 snippet를 찾을 수 있습니다:
+
 
 ```C
 if (!boot_error) {
@@ -48,8 +54,10 @@ if (!boot_error) {
 }
 ```
 
-우리는 `jiffies + 10*HZ` 의 값을 `timeout` 함수에게 할당합니다. 아마 이해하셨겠지만 이것은 10초의 대기시간을 의미합니다. 이후에 우리는 `time_before` 매크로를 이용하여 `jiffies` 의 값과 대기시간을 비교하는 루프를 시작합니다.
-또는 예를 들어 [Ensoniq Soundscape Elite](https://en.wikipedia.org/wiki/Ensoniq_Soundscape_Elite)사운드카드의 드라이버를 나타내는 [sound/isa/sscape.c](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/sound/isa/sscape) 소스코드를 살펴보면 On_Board 프로세서가 시작 승인 시퀸스에 반환될때 까지 지정된 대기시간의 초과를 기다리는 `obp_startup_ack` 함수가 표시됩니다.
+여기서 `jiffies + 10*HZ`값을 `timeout`변수에 할당합니다. 이미 이해했듯이, 이것은 10초의 시간 초과를 의미합니다. 그런 다음 `time_before`매크로를 사용하여 현재 `jiffies`값과 시간초과를 비교하는 루프를 시작합니다.
+
+또는 예를 들어 [Ensoniq Soundscape Elite](https://en.wikipedia.org/wiki/Ensoniq_Soundscape_Elite)사운드 카드에 대한 드라이버를 나타내는 [sound/isa/sscape.c](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/sound/isa/sscape)소스 코드 파일을 살펴보면, 그것의 시작 승인 시퀀스를 반환하는 On-Board 프로세에대해 주어진 시간초과를 기다리는 `obp_startup_ack`함수를 볼 수 있습니다:
+
 
 ```C
 static int obp_startup_ack(struct soundscape *s, unsigned timeout)
@@ -74,24 +82,26 @@ static int obp_startup_ack(struct soundscape *s, unsigned timeout)
 ```
 볼수 있듯이 `jiffies` 변수는 Linux kernel [code](http://lxr.free-electrons.com/ident?i=jiffies)에서 매우 넓게 사용됩니다. 제가 이미 적어놓은 것 처럼 우리는 이전 부분의 관련 개념인 `clocksource`에 아직 접하지 않았습니다. 우리는 이 개념과 `clocksource` 등록을 위한 API에 대한 짧은 설명을 봤을 뿐입니다.
 
-`clocksource`에 대한 소개
+보시다시피, `jiffies`변수는 리눅스 커널 [코드](http://lxr.free-electrons.com/ident?i=jiffies)에서 매우 널리 사용됩니다. 이미 쓴 것처럼, 우리는 이전 파트의 `clocksource`와는 다른 새로운 시간 관리와 관련된 개념을 만났습니다. 우리는 이 개념의 간단한 설명과 클럭 소스 등록을 위한 API를 봤습니다. 이 파트에서 자세히 살펴봅시다.
+
+ `clocksource`소개
 --------------------------------------------------------------------------------
 
-`clocksource` 의 개념은 리눅스 커널에서 클럭소스 관리를 위한 일반적인 API를 나타냅니다. 왜 우리는 이렇게 나뉘어진 틀 구조가 필요한 걸까요? 처음으로 돌아가보죠. `time` 개념은 리눅스 커널과 다른 운영체제 커널에서 매우 기초적인 개념입니다. 그리고 시간 관리는 이 개념에 있어서는 필수적인 것들 중에 한가지입니다. 예를 들어 리눅스 커널은 시스템이 시작했을때부터 경과한 시간을 업데이트해야합니다. 그리고 그것은 현재 프로세스가 모든 프로세스에 대해서 얼마나 오래 실행됬는지를 결정해야합니다. 리눅스 커널은 어디에서 시간에 대한 정보를 얻을까요? 가장 먼저 비휘발성 장치로 표시되는 Real Time Clock이나  [RTC](https://en.wikipedia.org/wiki/Real-time_clock)입니다. 우리는 리눅스 커널안에 있는[drivers/rtc](https://github.com/torvalds/linux/tree/master/drivers/rtc) 디렉토리에서 독립적인 아키텍쳐인 real time clock 드라이버를 찾을수 있습니다. 예를 들어 `CMOS/RTC` 는[x86](https://en.wikipedia.org/wiki/X86) architecture. The second is system timer - timer that excites [interrupts](https://en.wikipedia.org/wiki/Interrupt)의 아키텍쳐인 겨우 [arch/x86/kernel/rtc.c](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/arch/x86/kernel/rtc.c) 입니다. 두번째는 시스템 타이머입니다. 주기적인 속도로 인터럽트를 자극하는 타이머이죠. 예를 들어 [IBM PC](https://en.wikipedia.org/wiki/IBM_Personal_Computer) 호환의 경우에는 - programmable intercal time입니다.
+`clocksource`개념은 리눅스 커널에서 클럭 소스 관리를 위한 일반 API를 나타냅니다. 이를 위해 별도의 프레임워크가 왜 필요할까요? 처음으로 돌아가봅시다. `time`개념은 리눅스 커널 및 기타 운영 시스템 커널의 기본 개념입니다. 그리고 timekeeping은 이 개념을 사용하기 위한 필수요소 중 하나입니다. 예를 들어 리눅스 커널은 시스템 시작 이후의 경과 시간을 알고 업데이트해야하며, 현재 프로세스가 모든 프로세서에 대해 얼마나 오래 실행되었는지 결정해야합니다. 리눅스 커널은 어디서 시간에 대한 정보를 얻을까요? 우선 비휘발성 장치로 나타내는 실시간 클럭 또는 [RTC](https://en.wikipedia.org/wiki/Real-time_clock)입니다. [drivers/rtc](https://github.com/torvalds/linux/tree/master/drivers/rtc)디텍터리의 리눅스 커널에서 아키텍처 독립적 실시간 클럭 드라이버의 설정을 찾을 수 있습니다. 이외에도, 각 아키텍처는 아키텍처 의존적 실시간 클럭을 제공할 수 있습니다. 예를 들어 [x86](https://en.wikipedia.org/wiki/X86)아키텍처를 위한 `CMOS/RTC` - [arch/x86/kernel/rtc.c](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/arch/x86/kernel/rtc.c)가 있습니다. 두 번째는 주기적인 속도로 [인터럽트](https://en.wikipedia.org/wiki/Interrupt)를 자극하는 시스템 타이머입니다. 예를 들어 [IBM PC](https://en.wikipedia.org/wiki/IBM_Personal_Computer)호환 제품의 경우 [programmable interval timer](https://en.wikipedia.org/wiki/Programmable_interval_timer)가 있습니다.
 
-우리는 이미 시간을 지키기 위해 리눅스 커널에서 `jiffies`를 사용할 수 있다는 것을 알고 있습니다. `jiffies`는 `HZ`로 빈번하게 업데이트되는 읽기 전용 글로벌 변수로 간주 될 수 있습니다. 우리는 `HZ`가 합당한 범위가 `100`에서 `1000`Hz 인 컴파일-타임 커널 매개 변수라는 것을 알고 있습니다. 따라서 `1 ~ `10` 밀리 초로 시간 측정을 위한 인터페이스가 보장됩니다. 
-표준 `jiffies` 외에도, 우리는 거의 '1193182' 헤르츠 인 `i8253 / i8254`[programmable interval timer](https://en.wikipedia.org/wiki/Programmable_interval_timer) 또한  틱 속도를 기반으로하는 이전 부분의 `refined_jiffies` 클록 소스를 확인했습니다. 따라서 'refined_jiffies'로 약 '1' 마이크로 초의 해상도를 얻을 수 있습니다. 이 때, 주어진 클럭 소스의 시간 값 단위로 [nanoseconds](https://en.wikipedia.org/wiki/Nanosecond)가 가장 선호되는 선택입니다. 
+우리는 이미 timekeeping을 위해 리눅스 커널에서 `jiffies`를 사용할 수 있다는 것을 압니다. `jiffies`는 `HZ`주파수로 업데이트된 전역 변수 읽기로 간주될 수 있습니다. 우리는 `HZ`가 `100`에서 `1000`의 [Hz](https://en.wikipedia.org/wiki/Hertz) 범위에 적절한 컴파일시간 커널 매개변수인 것을 알고 있습니다. 따라서 `1` - `10`밀리초 해상도의 시간 측정을 위한 인터페이스가 보장됩니다. 표준 `jiffies` 외에, 우리는 거의 `1193182`헤르츠의 [programmable interval timer](https://en.wikipedia.org/wiki/Programmable_interval_timer)틱 속도를 기반으로 하는 이전 파트의 `refined_jiffies`클럭 소스를 봤습니다. 따라서 `refined_jiffies`로 `1`마이크로 초 해상도에 관한 무언가를 얻을 수 있습니다. 이번에는 [나노 초](https://en.wikipedia.org/wiki/Nanosecond)로 주어진 클럭 소스의 타임 벨류 유닛을 위한 선호하는 선택을 합니다.
 
-시간 간격의 측정을 위한 더 정확한 기술의 가용성은 하드웨어에 의존하는 것입니다. 우리는 `x86` 의존적인 타이머 하드웨어에 대해서 알게 되었습니다. 하지만 각각의 아키텍쳐는 각각의 하드웨어적인 타이머를 제공합니다. 일찍이 각 아키텍쳐는 이 목적을 위한 자체적인 구현을 할 수 있습니다. 이 문제에 대한 해결법은 다양한 클럭소스를 관리하고 타이머 인터럽트와는 독립된 공통 프레임워크 안에 있는 추상화 레이어와 연합된 API입니다. 이 평범한 코드 프레임워크는 `clocksource` 프레임워크가 되었습니다.
+시간 간격 측정을 위한 더 정확한 기술의 가용성은 하드웨어에 따라 다릅니다. 우리는 `x86` 의존 타이머 하드웨어에 대해 조금 알고 있습니다. 그러나 각 아키텍처는 자체 타이머 하드웨어를 제공합니다. 이전에는 각 아키텍처가 이 목적을 위해 구현되었습니다. 이 문제의 해결책은 다양한 클럭 소스를 관리하고 타이머 인터럽트와 독립적인 공통 코드 프레임워크의 추상 레이어 및 관련 API입니다. 이 공통 코드 프레임워크는 `clocksource`프레임워크 입니다.
 
-일반적인 시간 및 클럭 소스 관리 프레임 워크는 많은 시간 관리 코드를 독립적인 아키텍쳐의 부분으로 옮겼습니다. 의존적인 아키텍쳐 부분은 저수준의 하드웨어 클럭 소스 정의 및 관리를 줄여줍니다. 다른 아키텍쳐나 다른 하드웨어에서 시간 간격을 측정하려면 많은 재원이 필요하고 또한 이것은 매우 복잡합니다. 각 시계 관련 서비스의 구현은 개별 하드웨어 장치와 밀접한 관련이 있습니다. 그리고 이것은 다른 아키텍쳐에서도 비슷한 구현이 가능합니다.
+일반적인 timeofday와 클럭 소스 관리 프레임워크는 많은 timekeeping코드를 코드의 아키텍처 독립적인 부분으로 이동시켰으며, 아키텍처 의존적인 부분은 클럭소스의 저수준 하드웨어 부분을 정의하고 관리하는 것으로 축소되었습니다.  다른 하드웨어로 다른 아키텍처마다 시간 간격을 측정하려면 많은 자금이 필요하며 매우 복잡합니다. 서비스와 관련된 각 클럭의 구현은 개별 하드웨어 장치와 밀접하게 연관됐으며, 이해하는 것처럼 다른 아키텍처에서도 비슷한 구현이 발생합니다.
 
-이 프레임워크에서 각각의 클럭 소스는 단조롭게 증가하는 값의 시간에 대한 표현을 유지하는 것을 필요로 합니다. 우리가 리눅스 커널 코드에서 볼수 있듯이 나노초는 클럭 소스에서 요즘 가장 잘쓰이는 시간 값중에서 가장 마음에 드는 선택입니다. 클럭 소스 프레임워크의 중요한 점은 사용자가 시스템을 구성하고 다른 클록 소스를 선택, 액세스 및 스케일링 할 때 클럭 기능을 지원하는 다양한 하드웨어 장치 중에서 클럭소스를 선택할 수 있도록 하는 것입니다. 
+이 프레임워크 내에서, 각 클럭 소스는 단조롭게 증가하는 값으로 시간 표현을 유지해야 합니다. 우리가 리눅스 커널 코드에서 볼 수 있듯이, 나노 초는 이 시점에서 클럭 소스의 타임 벨류 유닛에 대한 가장 선호되는 선택입니다. 클럭 소스 프레임워크의 중요한 점은 사용자가 시스템을 구성하고 선택, 접근 및 다른 클럭 소스를 스케일링할 때 클록 함수를 지원하는 다양한 하드웨어 중에서 클럭 소스를 선택하는 것을 허용하는 것입니다.
 
-클럭소스 구조
+클록 소스 구조체
 --------------------------------------------------------------------------------
 
-`clocksource` 프레임워크의 기본적인 것은 `clocksource` 구조인데 그것은 [include/linux/clocksource.h](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/include/linux/clocksource.h) 헤더파일에 정의되어있습니다. 우리는 이전 부분[part](https://0xax.gitbooks.io/linux-insides/content/Timers/linux-timers-1.html).에서 `clocksource`  구조에 의해 제공된 일부 필드를 이미 보았습니다. 이 구조의 전체적인 정의를 살펴보고 모든 필드에 대해 설명해봅시다.
+`clocksource`프레임워크의 기본은 [include/linux/clocksource.h](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/include/linux/clocksource.h)헤더파일에 정의된 `clocksource`구조체입니다. 우리는 이미 이전 [파트](https://0xax.gitbooks.io/linux-insides/content/Timers/linux-timers-1.html)에서 `clocksource`구조체가 제공하는 몇 가지 필드를 봤습니다. 이 구조체의 전체 정의을 살펴보고 모든 필드를 설명하겠습니다:
+
 
 ```C
 struct clocksource {
@@ -122,8 +132,8 @@ struct clocksource {
 } ____cacheline_aligned;
 ```
 
+우리는 이미 이전 파트에서 `clocksource`구조체의 첫 번째 필드를 봤습니다. 이것은 클럭 소스 프레임워크에서 선택한 최고의 카운터를 반환하는 `read`함수의 포인터입니다. 예를 들어 `jiffies_read`함수를 사용해 `jiffies`값을 읽습니다:
 
-우리는 이미 이전 파트에서 `clocksource` 구조의 첫부분을 보았습니다. 그것은 클럭소스 프레임워크에서 선택한 최고의 카운터를 반환하는 `read` 함수에 대한 포인터입니다. 예를 들어 `jiffies_read` 함수를 이용해 `jiffies` 를 읽는 것과 같습니다.
 
 ```C
 static struct clocksource clocksource_jiffies = {
@@ -133,7 +143,8 @@ static struct clocksource clocksource_jiffies = {
 }
 ```
 
-`jiffies_read` 가 반환됨:
+여기서 `jiffies_read`을 반환합니다:
+
 
 ```C
 static cycle_t jiffies_read(struct clocksource *cs)
@@ -141,7 +152,8 @@ static cycle_t jiffies_read(struct clocksource *cs)
 	return (cycle_t) jiffies;
 }
 ```
-혹은 `read_tsc` 함수:
+
+또는 `read_tsc`함수입니다:
 
 ```C
 static struct clocksource clocksource_tsc = {
@@ -150,28 +162,30 @@ static struct clocksource clocksource_tsc = {
 	...
 };
 ```
+[타임 스탬프 카운터](https://en.wikipedia.org/wiki/Time_Stamp_Counter)를 읽었습니다.
 
-타임 스탬프[time stamp counter](https://en.wikipedia.org/wiki/Time_Stamp_Counter) 카운터를 읽기 위함이다.
+다음 필드는 비`64 bit`카운터와 카운터 값을 빼는데 특별한 오버플로 논리가 필요하지 않도록 보장해주는 `mask`입니다. `mask`필드 다음에 우리는 두 필드 `mult`와 `shifr`를 볼 수 있습니다. 이들은 각 클럭 소스에 특정한 타임 벨류를 변환하는 기능을 제공하는 수학 함수의 기초가 되는 필드입니다. 즉, 이 두 필드는 카운터의 추상 기계 타임 유닛을 나노 초로 변환하는데 도움이 됩니다.
 
-다음 필드는 `64 bit` 카운터가 아닌 카운터에서 카운터 값 사이의 감산 시 특별한 오버플로 로직이 필요하지 않도록 하는 `mask`입니다. `mask` 필드 이후에 우리는 두가지 필드를 볼수 있습니다: `mult` 와 `shift`. 이것들은 수학적인 함수에 기반을 한 필드들입니다. 그리고 그것들은 각 클럭 소스에 특정한 시간 값을 변환하는 기능을 제공합니다. 즉 이 두 필드는 우리가 카운터의 추상적인 기계 시간 단위를 나노초로 변환하는 데 도움을 준다.
+이 두 필드 이후에 `64`비트 `max_idle_ns`필드는 클럭 소스가 허용하는 최대 대기 시간을 나노 초 단위로 나타냅니다.이 필드에는 `CONFIG_NO_HZ`커널 구성 옵션이 활성화된 리눅스 커널이 필요합니다. 이 커널 구성 옵션은 정규 타이머 틱(다른 파트에서 모든 설명을 볼 것입니다) 없이 리눅스 커널을 활성화합니다. 문제는 다이나믹 틱이 커널에 싱글 틱보다 긴 시간 동안 절전을 허용하며, 절전 시간에 제한도 없다는 것입니다. `max_idle_ns`필드는 이 절전 한계를 나타냅니다. 
 
-이 두 필드 후에 우리는 `64`bits `max_idle_ns` 필드가 클럭 소스가 허용하는 max_idle_time을 나노초 단위로 나타낸다는 것을 알 수 있다. `CONFIG_NO_HZ` 커널 구성 옵션이 활성화된 Linux 커널에 대해서는 이 필드가 필요하다. 이 커널 구성 옵션을 사용하면 리눅스 커널이 일반 타이머 확인 없이 실행될 수 있다(다른 부분에서 자세한 설명을 볼 수 있다). 동적 눈금이 커널을 단일 눈금보다 더 긴 시간 동안 재울 수 있다는 문제는 더 이상 수면 시간이 무제한일 수 있다는 것이다. `max_idle_ns` 필드는 이 절전 수면 제한을 나타낸다.
-
-`max_idle_ns` 다음 필드는 `maxadj` 필드로 `mult`에 대한 최대 조정 값이다. 사이크을 나노초로 변환하는 주요공식이 여기있다:
+`max_idle_ns` 다음 필드는  `mult`의 최대 조정 값인 `maxadj`필드입니다. 사이클을 나노 초로 변환하는 주요 공식:
 
 ```C
 ((u64) cycles * mult) >> shift;
 ```
 이것은 `100%` 정확하진 않습니다. 대신에 숫자는 가능한한 1 나노초에 가까이 나타내고 `maxadj`는 이것을 수정하는 것을 도와주고 또한 클럭소스 API가 조정될때 오버플로가 발생할 수 있는 `mult` 값을 피할 수 있도록 해줍니다. 다음 4가지 필드는 함수에 대한 포인터입니다.
 
-* `enable` - 클럭 소스를 활성화하는 선택적 기능;
-* `disable` - 클럭 소스를 비활성화하는 선택적 기능;
-* `suspend` - 클럭 소스에 대한 일시 중단 기능;
-* `resume` - 클럭 소스에 대한 재개;
+`100%`정확하지는 않습니다. 대신 숫자는 가능한 한 나노 초에 가깝고, `maxadj`는 이를 수정하는데 도움이 되며, 클럭 소스 API가 조정됐을 때 오버플로 될 수 있는 `mult`값을 피하게 해줍니다. 다음 4개의 필드는 함수에 대한 포인터입니다:
 
-다음 필드는 `max_cycle`이며, 이름에서 알 수 있듯이 이 필드는 잠재적 오버플로 전의 최대 사이클 값을 나타낸다. 그리고 마지막 필드는 소유자가 클럭 소스의 소유자인 커널 [module](https://en.wikipedia.org/wiki/Loadable_kernel_module)에 대한 참조를 나타낸다. 이게 다야. 우리는 방금 `clocksource` 구조의 모든 표준 필드를 살펴보았다. 하지만 당신은 우리가  `clocksource` 구조의 몇몇 분야를 놓쳤다는 것을 알 수 있다. 누락된 필드는 다음 두 가지 유형으로 나눌 수 있다. 첫 번째 유형의 분야는 이미 우리에게 알려져 있다. 예를 들어, 그것들은 `clocksource`의 이름을 나타내는 `name` 필드, 리눅스 커널이 최고의  `clocksource` 등을 선택하도록 돕는 `rating` 필드 등이다. 다른 리눅스 커널 구성 옵션에 종속된 두 번째 유형. 이 필드를 봅시다.
+* `enable` - 클럭 소스를 활성화하는 옵션 함수;
+* `disable` - 클럭 소스를 비활성화하는 옵션 함수;
+* `suspend` - 클럭 소스에 대한 일시 중단 함수;
+* `resume` - 클럭 소스에 대한 다시 시작 함수;
 
-첫 번째 필드는 `archdata`다. 이 필드에는 `arch_clocksource_data` 유형이 있으며 `CONFIG_ARCH_CLOCKSOURCE_DATA` 커널 구성 옵션에 따라 달라집니다. 이 분야는 현재 [x86](https://en.wikipedia.org/wiki/X86) 및 [IA64](https://en.wikipedia.org/wiki/IA-64) 아키텍처에 대해서만 실제적입니다. 그리고 다시, 우리가 필드의 이름에서 이해할 수 있듯이, 그것은 클럭소스에 대한 아키텍처별 데이터를 나타냅니다. 예를 들어 `vDSO` 클럭 모드를 나타낸다.
+다음 필드는 `max_cycles`로 이름에서 알 수 있듯이, 이 필드는 잠재적 오버플로 이전의 최대 사이클 값을 나타냅니다. 그리고 마지막 필드는 `owner`로 클럭 소스의 소유자인 커널 [모듈](https://en.wikipedia.org/wiki/Loadable_kernel_module)에 대한 참조를 나타냅니다. 이것이 전부입니다. 우리는 `clocksource`구조체의 모든 표준 필드를 살펴보았습니다. 그러나 `clocksource` 구조체의 일부 필드를 놓친 것을 알 수 있습니다. 누락된 모든 필드는 두 타입으로 나눌 수 있습니다: 첫 번째 타입은 이미 알고 있습니다. 예를 들어, `clocksource`의 이름을 나타내는 `name`필드에서, `rating`필드는 리눅스 커널에이 최상의 클럭 소스 등을 선택하는데 도움이 됩니다. 두 번째 타입은, 다른 리눅스 커널 구성 옵션에 종속적인 필드입니다. 이 필드들을 살펴봅시다.
+
+첫 번째 필드는 `archdata`입니다. 이 필드는 `arch_clocksource_data`타입을 가졌으며`CONFIG_ARCH_CLOCKSOURCE_DATA` 커널 구성 옵션에 따라 다릅니다. 이 필드는 현재 [x86](https://en.wikipedia.org/wiki/X86) 및 [IA64](https://en.wikipedia.org/wiki/IA-64)에만 해당합니다. 또한 필드 이름에서 알 수 있듯이, 클럭 소스에 대한 아키텍처 특정 데이터를 나타냅니다. 예를 들어, `vDSO` 클럭 모드를 나타냅니다:
+
 
 ```C
 struct arch_clocksource_data {
@@ -179,7 +193,7 @@ struct arch_clocksource_data {
 };
 ```
  
-`x86` 아키텍쳐의 경우 `vDOS` 클럭 모드가 다음 중 하나가 될 수 있는 경우:
+`x86`아키텍처를 위합니다. `vDSO`클럭 모드의 위치는 다음 중 하나가 될 수 있습니다:
 
 ```C
 #define VCLOCK_NONE 0
@@ -188,16 +202,14 @@ struct arch_clocksource_data {
 #define VCLOCK_PVCLOCK 3
 ```
 
-마지막 3개 필드는 `wd_list`, `cs_last`, `wd_last`인데 `CONFIG_CLOCKSOURCE_WATCHDOG` 커널 구성 옵션에 따라 달라진다. 우선 `watchdog` 가 뭔지 이해하도록 노력하도록 하자. 간단히 말해서 `watchdog`는 컴퓨터 오작동을 감지하고 그것을 복구하는 데 사용되는 타이머다. 이 세 분야 모두 클럭소스 프레임워크에서 사용하는 감시 관련 데이터를 포함하고 있습니다. Linux 커널 소스 코드를 grep(?)할 경우, [arch/x86/KConfig](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/arch/x86/Kconfig#L54) 커널 구성 파일에만 `CONFIG_CLOCKSOURCE_WATCHDOG` 커널 구성 옵션이 포함되어 있음을 확인할 수 있습니다. 그렇다면 `x86`과 `x86_64`는 왜 `watchdog`가 필요할까? 모든 x86 프로세서에는 특수 64비트 레지스터 - 타임스탬프 카운터가 있다는 것을 이미 알고 있을 것입니다. 이 레지스터는 재설정 후 [cycles](https://en.wikipedia.org/wiki/Clock_rate)를 포함합니다. 때때로 [time stamp counter](https://en.wikipedia.org/wiki/Time_Stamp_Counter)는 다른 클럭 소스에 대해 검증되어야 합니다. 이 파트에서 `watchdog` 타이머의 초기화를 볼 수 없을 것이며, 그 전에 타이머에 대해 더 자세히 알아봐야 합니다.
-그게 다입니다. 이시간을 기해서 우리는 클럭소스 구조의 모든 필드에 대해서 알게 되었습니다. 이 지식은 클럭소스 프레임워크의 내부를 배울때 도움을 줄것입니다.
+마지막 세 필드는 `CONFIG_CLOCKSOURCE_WATCHDOG` 커널 구성 옵션에 따르는 `wd_list`, `cs_last`, `wd_last`입니다. 우선 `watchdog`가 무엇인지 이해해봅시다. 간단히 말하면, watchdog는 컴퓨터 오작동을 감지하고 복구하는데 사용되는 타이머입니다. 이 세 필드는 `clocksource`프레임워크에서 사용하는 데이터와 관련된 watchdog를 포함합니다. 리눅스 커널 소스 코드를 grep하면 [arch/x86/KConfig](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/arch/x86/Kconfig#L54)커널 구성 파일에서만 `CONFIG_CLOCKSOURCE_WATCHDOG` 커널 구성 옵션을 포함한 것을 볼 수 있습니다. 왜 [watchdog](https://en.wikipedia.org/wiki/Watchdog_timer)에서 `x86` 및 `x86_64`이 필요할까요? 당신은 이미 모든 `x86`프로세서가 특별한 64비트 레지스터 [타임 스탬프 카운터](https://en.wikipedia.org/wiki/Time_Stamp_Counter)를 가진 것을 알 것입니다. 이 레지스터는 리셋 이후의 [cycles](https://en.wikipedia.org/wiki/Clock_rate)수를 포함합니다. 때때로 타임 스탬프 카운터는 다른 클럭 소스를 확인해야합니다. 우리는 이 파트에서 `watchdog`타이머의 초기화는 보지 않을 것입니다. 그 전에 타이머에 대해 더 배워야 합니다.
 
-그게 다입니다. 이시간을 기해서 우리는 `clocksource` 구조의 모든 필드에 대해서 알게 되었습니다. 이 지식은 `clocksource` 프레임워크의 내부를 배울때 도움을 줄것입니다.
+그것이 전부입니다. 이 순간부터 우리는 `clocksource`구조체의 모든 필드를 압니다. 이 지식은 `clocksource`프레임워크 내부를 배우는 것을 도와줄 것입니다.
 
-새 클럭소스 등록
+새로운 클럭 소스 등록
 --------------------------------------------------------------------------------
 
-우리는 이전  [part](https://0xax.gitbooks.io/linux-insides/content/Timers/linux-timers-1.html)에서 클럭소스 프레임 워크의 오직 하나의 기능만을 보았습니다.
-이 기능은 `__clocksource_register`입니다. 이 기능은 [include/linux/clocksource.h](https://github.com/torvalds/linux/tree/master/include/linux/clocksource.h)에 정의되어 있습니다. 헤더 파일 그리고 우리가 기능의 이름으로부터 이해할 수 있듯이, 이 기능의 주요 점은 새로운 클럭 소스를 등록하는 것입니다. `__clocksource_register` 기능의 구현을 살펴보면, `__clocksource_register_scale` 함수를 호출하기만 하면 그 결과를 다음과 같이 반환하는 것을 알 수 있을 것입니다:
+우리는 이전 [파트](https://0xax.gitbooks.io/linux-insides/content/Timers/linux-timers-1.html)의 `clocksource`프레임워크에서 하나의 함수만을 봤습니다. 이 함수는 `__clocksource_register`입니다. 이 함수는 [include/linux/clocksource.h](https://github.com/torvalds/linux/tree/master/include/linux/clocksource.h)헤더파일에서 정의되었으며 이름에서 알 수 있듯이, 이 함수의 중요한 점은 새로운 클럭 소스를 등록하는 것입니다. `__clocksource_register`함수의 구현을 살펴보면, `__clocksource_register_scale`함수의 호출과 그 결과의 반환을 볼 수 있습니다:
 
 ```C
 static inline int __clocksource_register(struct clocksource *cs)
@@ -205,7 +217,8 @@ static inline int __clocksource_register(struct clocksource *cs)
 	return __clocksource_register_scale(cs, 1, 0);
 }
 ```
-우리가 `__clocksource_register_scale`함수의 기능 구현을 보기 전에 우리는 `clocksource`가 새로운 클럭소스 등록을 위한 추가 API를 제공하는 것을 볼 수 있습니다.
+
+`__clocksource_register_scale`함수의 구현을 보기 전에, `clocksource`에서 새로운 클럭 소스 등록을 위한 추가 API를 제공하는 것을 볼 수 있습니다:
 
 ```C
 static inline int clocksource_register_hz(struct clocksource *cs, u32 hz)
@@ -220,11 +233,13 @@ static inline int clocksource_register_khz(struct clocksource *cs, u32 khz)
 ```
 그리고 모든 함수들은 같은 일을 합니다. 그들은 `__clocksource_register_scale` 함수의 값을 돌려줍니다. 하지만 다른 매개변수 세트를 가지고 있습니다. `__clocksource_register_scale` 함수는 [kernel/time/clocksource.c](https://github.com/torvalds/linux/tree/master/kernel/time/clocksource.c) 소스코드 파일에 정의 되어 있습니다. 두가지 함수의 차이점을 이해하려면  `__clocksource_register_khz` 함수의 매개변수를 살펴보자. 우리가 볼 수 있듯이 이 함수는 세개의 매개변수를 갖습니다.
 
-* `cs` - 클럭소스가 설치되게 해준다.;
-* `scale` - 클럭 소스의 축척 계수 즉, 주파수에 대해 이 매개변수의 값을 곱하면 클럭 소스의 `hz`를 얻을 수 있다;
-* `freq` - 클럭소스 주파수를 눈금으로 나눕니다.;
+그리고 이 모든 함수는 동일합니다. 이들은 `__clocksource_register_scale`함수의 값을 반환하지만 다른 매개 변수 설정을 사용합니다. `__clocksource_register_scale`는 [kernel/time/clocksource.c](https://github.com/torvalds/linux/tree/master/kernel/time/clocksource.c)소스 코드 파일에서 정의되었습니다. 함수들 사이의 차이를 이해하기 위해 `clocksource_register_khz`함수의 매개변수를 살펴봅시다. 보시다시피, 이 함수는 세 개의 매개변수를 가집니다:
 
-이제 `__clocksource_register_scale` 함수의 구현에 대해 살펴보자.
+* `cs` - 설치될 클럭 소스;
+* `scale` - 클러 소스의 스케일 요소.다시 말해, 이 매개변수의 값을 주파수에 곱하면 클럭 소스의 `hz`를 얻을 수 있습니다;
+* `freq` - 클럭 소스 주파수를 스케일로 나눈 값.
+
+이제 `__clocksource_register_scale`함수의 구현을 살펴봅시다:
 
 ```C
 int __clocksource_register_scale(struct clocksource *cs, u32 scale, u32 freq)
@@ -239,7 +254,9 @@ int __clocksource_register_scale(struct clocksource *cs, u32 scale, u32 freq)
 }
 ```
 
-우선 `__clock_register_scale` 함수는 동일한 소스 코드 파일에 정의되어 있는 `__clock_update_frq_scale` 함수의 호출에서 시작하여 주어진 클럭 소스를 새로운 주파수로 업데이트하는 것을 알 수 있다. 이 기능의 구현에 대해 살펴보자. 첫 번째 단계에서는 주어진 주파수를 확인하고 `zero`으로 통과되지 않은 경우 주어진 클럭 소스에 대한 멀티 및 시프트 파라미터를 계산해야 합니다. 주파수의 값을 확인해야 하는 이유는? 사실 `zero`이 될 수 있습니다. `__clocksource_register` 기능의 구현을 주의깊게 살펴본다면, 우리가 주파수를 0으로 넘겼다는 것을 알아차렸을지도 모릅니다. 자체 정의 된 `mult` 및 `shift` 매개 변수가있는 일부 클럭 소스에 대해서만 이를 수행합니다. previous [part](https://0xax.gitbooks.io/linux-insides/content/Timers/linux-timers-1.html)을 살펴보면 `jiffies` 에 대한 `mult`와 `shift` 계산을 볼 수 있습니다. `mult` 와 `shift` 계산을 봐보죠:
+우선 `__clocksource_register_scale`함수가 동일한 소스 코드 파일에서 정의된 `__clocksource_update_freq_scale`함수에서 시작하고 주어진 클럭 소스를 새로운 주파수로 업데이트 하는 것을 볼 수 있습니다. 이 함수의 구현을 살펴봅시다. 첫 번째 단계ㄹ 우리는 주어진 주파수를 확인하고 `0`으로 전달되지 않으면, 주어진 클럭 소스에 대한 `mult` 및 `shift` 매개변수를 계산해야 합니다. 왜 `frequency`의 값을 확인해야 하는 걸까요? 실제로 이것이 0이 될 수 있기 때문입니다.  `__clocksource_register`함수의 구현을 주의깊게 보면, `frequency`가 `0`으로 전달 되는 것을 눈치 챌 수 있을 것입니다. 우리는 스스로 정의된 `mult` 및 `shift`매개변수를 가진 일부 클럭 소스에 대해서만 이를 수행할 것입니다. 이전 [파트](https://0xax.gitbooks.io/linux-insides/content/Timers/linux-timers-1.html)를 보면 `jiffies`를 위한 `mult` 및 `shift`의 계산을 볼 수 있습니다. `__clocksource_update_freq_scale`함수는 다른 클럭 소스를 위한 우리의 클럭 소스를 위해 작동합니다.
+
+따라서 `__clocksource_update_freq_scale`함수의 시작에서 우리는 `frequency`매개변수의 값을 확인하고 0이 아니면 주어진 클럭 소스를 위한 `mult` 및 `shift`를 계산해야합니다. `mult`와 `shift`의 계산을 살펴봅시다:
 
 ```C
 void __clocksource_update_freq_scale(struct clocksource *cs, u32 scale, u32 freq)
@@ -265,15 +282,16 @@ void __clocksource_update_freq_scale(struct clocksource *cs, u32 scale, u32 freq
 }
 ```
 
-여기서는 클럭 소스 카운터가 오버플로우되기 전에 실행할 수 있는 최대 시간(초)의 계산을 볼 수 있습니다. 우선, 우리는 클럭 소스 마스크의 값으로 `sec` 변수를 채웁니다. 클럭 소스의 마스크는 주어진 클럭 소스에 유효한 최대 비트 양을 나타냅니다. 이 일이 끝나면, 우리는 두 개로 나뉜 연산을 볼수 있습니다. 처음에 우리는 클럭 소스 주파수와 스케일 팩터로 `sec` 변수를 나눕니다.  `freq` 매개변수는 1초 안에 얼마나 많은 타이머 인터럽트가 발생할지를 보여줍니다. 그래서 우리는 타이머의 주파수에서 카운터의 최대 수(예: `jiffy`)를 나타내는 `mask` 값을 나누며, 특정 클럭 소스의 최대 수(초)를 얻을 것입니다. 2분할 작동은 1헤르츠 또는 1킬로헤르츠(10^3 Hz)의 스케일 인자에 따라 특정 클럭 소스에 대해 최대 초를 제공합니다. 
-최대 시간(초)을 얻은 후 이 값을 확인하여 다음 단계에서 결과에 따라 `1` 또는 `600`으로 설정합니다. 이 값은 클럭 소스의 최대 절전 시간(초)이다. 다음 단계에서 우리는 `clocks_calc_mult_shift`의 호출을 볼 수 있습니다. 이 함수의 핵심은 주어진 클럭 소스에 대한 `mult` 및  값 계산입니다. `__clocksource_update_frq_scale` 함수의 끝에서 우리는 주어진 클럭 소스의 계산된 멀티 값만 조정 후 오버플로를 일으키지 않는지 확인하고, 주어진 클럭 소스의 `max_idle_ns` 및 `max_cycle` 값을 클럭 소스 카운터로 변환할 수 있는 최대 나노초로 업데이트하고 결과를 커널 버퍼로 인쇄합니다:
+여기에서 클럭 소스 카운터가 오버플로 되기 전에 실행할 수 있는 초의 최대 시간을 계산하는 것을 볼 수 있습니다. 우선 `sec`변수를 클럭 소스 마스크의 값으로 채웁니다. 클럭 소스 마스크가 주어진 클럭 소스에 대해 유효한 비트의 최대량을 나타내는 것을 기억하십시오. 그 다음, 우리는 두 개의 분할 작업을 볼 수 있습니다. 먼저 `sec`변수를 클럭 소스 주파수와 스케일 요소로 나눕니다. `freq`매개변수는 1초 동안 얼마나 많은 타이머 인터럽트가 발생하는지 보여줍니다. 따라서, 우리는 타이머의 주파수로 카운터(예시 `jiffy`)의 최대 번호를 나타내는 `mask`값을 나누고 특정 클럭 소스에 대한 최대 시간(초)을 얻습니다. 두 번째 나눗셈 연산은 `1`헤르츠 또는 `1`킬로헤르츠(10^3 Hz)의 스케일 요소에 따라 특정 클럭 소스를 위한 최대 시간(초)을 줍니다.
+
+최대 시간(초)을 얻은 다음, 우리는 이 값을 확인하고 다음 단계의 결과에 따라 `1` 또는 `600`으로 설정합니다. 이 값들은 초 단위의 클럭 소스를 위한 최대 대기 시간입니다. 다음 단계에서 우리는 `clocks_calc_mult_shift`의 호출을 볼 수 있습니다. 이 함수의 중요한 점은 주어진 클럭 소스를 위한 `mult`와 `shift` 값의 계산입니다. `__clocksource_update_freq_scale`함수의 끝에서 우리는 주어진 클럭 소스의 계산된 `mult`값이 조정 후 오버플로를 유발하지 않는지 확인하고 주어진 클럭 소스의 값 `max_idle_ns`와 `max_cycles`를 클럭 소스 카운터로 변환될 수 있는 최대 나노 초로 업데이트 하고 결과를 커널 버퍼로 출력합니다:
 
 ```C
 pr_info("%s: mask: 0x%llx max_cycles: 0x%llx, max_idle_ns: %lld ns\n",
 	cs->name, cs->mask, cs->max_cycles, cs->max_idle_ns);
 ```
 
-that we can see in the [dmesg](https://en.wikipedia.org/wiki/Dmesg) output:
+[dmesg](https://en.wikipedia.org/wiki/Dmesg)출력에서 볼 수 있습니다:
 
 ```
 $ dmesg | grep "clocksource:"
@@ -284,7 +302,7 @@ $ dmesg | grep "clocksource:"
 [    1.452979] clocksource: tsc: mask: 0xffffffffffffffff max_cycles: 0x7350b459580, max_idle_ns: 881591204237 ns
 ```
 
-`__clocksource_update_frq_scale` 함수가 작업을 마치면 새로운 클럭 소스를 등록할 `__clocksource_register_scale` 함수로 돌아갈 수 있다. 우리는 다음 세 가지 기능의 호출을 볼 수 있다.
+`__clocksource_update_freq_scale`함수가 작업을 완료한 다음, 새로운 클럭 소스를 등록하는 `__clocksource_register_scale`함수로 돌아갈 수 있습니다. 다음 세 함수의 호출을 볼 수 있습니다:
 
 ```C
 mutex_lock(&clocksource_mutex);
@@ -294,8 +312,9 @@ clocksource_select();
 mutex_unlock(&clocksource_mutex);
 ```
 
-첫 번째가 호출되기 전에 `clocksource_mutex` [mutex](https://en.wikipedia.org/wiki/Mutual_exclusion)를 잠근다는 점에 유의하십시오. `clocksource_mutex` 뮤텍스의 포인트는 현재 선택된 클럭소스 및 등록된 클럭소스가 포함된 목록을 나타내는 clocksource_list 변수를 나타내는 `curr_clocksource` 변수를 보호하는 것이다. 자, 이제 이 세 가지 기능을 살펴봅시다.
-첫 번째 `clocksource_enqueue` 함수 및 다른 두 개는 동일한 소스 코드 파일[file](https://github.com/torvalds/linux/tree/master/kernel/time/clocksource.c)에 정의되어 있다. 우리는 이미 등록된 모든 클럭 소스와 다른 말로 하면 `clocksource_list`의 모든 요소를 살펴보고 주어진 `clocksource`에 가장 적합한 장소를 찾으려고 노력한다.
+첫 번째 함수가 호출되기 전에, `clocksource_mutex`[뮤텍스](https://en.wikipedia.org/wiki/Mutual_exclusion)를 잠그십시오. `clocksource_mutex`뮤텍스의 요점은 현재 선택된 `clocksource`와 등록된 `clocksources`를 포함한 리스트를 나타내는 `clocksource_list`를 나타내는 `curr_clocksource` 변수를 보호하는 것입니다. 이제, 이 세 개의 함수를 살펴봅시다.
+
+첫 번째 `clocksource_enqueue`함수와 다른 두 함수는 동일한 소스 코드 [파일](https://github.com/torvalds/linux/tree/master/kernel/time/clocksource.c)에 정의되어있습니다. 우리는 이미 등록된 `clocksources`의 모든 과정을 거칩니다. 다시 말해 우리는 `clocksource_list`의 모든 요소를 거치며 주어진 `clocksource`에 가장 적합한 장소를 찾으려합니다:
 
 ```C
 static void clocksource_enqueue(struct clocksource *cs)
@@ -310,10 +329,9 @@ static void clocksource_enqueue(struct clocksource *cs)
 }
 ```
 
-결국 우리는 새로운 클럭 소스를 `clocksource_list`에 삽입할 뿐입니다. 두 번째 기능인 `clocksource_enqueue_watchdog`는 이전 기능과 거의 동일하지만 `wd_list`에 새 클럭 소스를 삽입하는 것은 클럭 소스의 플래그에 따라 달라지며 새로운  [watchdog](https://en.wikipedia.org/wiki/Watchdog_timer) 타이머를 시작한다. 내가 이미 썼듯이, 우리는 이 부분에서 `watchdog`와 관련된 것들을 고려하지 않고 다음 부분에서 할 것입니다.
+결국 우리는 새로운 클럭소스를 `clocksource_list`에 삽입합니다. 두 번째 함수 `clocksource_enqueue_watchdog`는 이전 함수와 거의 같지만 새로운 클럭 소스를 클럭 소스의 플래그에 의존하는 `wd_list`에 삽입하고 새로운 [watchdog](https://en.wikipedia.org/wiki/Watchdog_timer)타이머를 시작합니다. 따라서 이미 쓴 것처럼, 우리는 이 파트에서 관련된 `watchdog`를 고려하지 않아도 되지만 다음 파트에서 다룰 것입니다. 
 
-마지막 함수는 `cocksource_select`입니다. 기능 이름에서 알 수 있듯이, 이 기능의 주요 지점 - 등록된 클럭 소스에서 최고의 `clocksource`를 선택하십시오. 이 기능은 기능 도우미의 호출로만 구성됩니다. 
-
+마지막 함수는 `clocksource_select`입니다. 함수 이름에서 이해할 수 있듯이, 이 함수의 중요한 점은 등록된 클럭소스에서 최고의  `clocksource`를 선택하는 것입니다. 이 함수는 함수 도우미의 호출로만 구성됩니다:
 
 ```C
 static void clocksource_select(void)
@@ -321,7 +339,8 @@ static void clocksource_select(void)
 	return __clocksource_select(false);
 }
 ```
-`__clocksource_select` 함수는 하나의 파라미터(우리의 경우 `false`)를 취한다는 점에 유의하세요. 이 [bool](https://en.wikipedia.org/wiki/Boolean_data_type) 매개변수는 `cocksource_list`를 횡단하는 방법을 보여줍니다. 우리의 경우, 우리는 locksource_list의 모든 항목을 검토한다는 것을 의미하는 `false`를 통과합니다. 우리는 이미 `clocksource_enqueue` 함수의 호출 이후에 `clocksource_list`에서 최고의 등급을 가진 클럭소스가 첫 번째가 될 것이라는 것을 알고 . 그래서 우리는 이 목록에서 그것을 쉽게 얻을 수 있습니다. 최고 등급의 시계 소스를 찾은 후 다음으로 전환합니다:
+
+`__clocksource_select`함수는 하나의 매개변수(우리의 경우 `false`)를 가집니다. 이 [bool](https://en.wikipedia.org/wiki/Boolean_data_type)매개변수는 `clocksource_list`가 어떻게 가로지르는지 보여줍니다. 우리의 경우 `clocksource_list`의 모든 엔트리를 거치는 것을 의미하는 `false`를 전달합니다. 우리는 이미 `clocksource_enqueue`함수의 호출 다음 첫 번째 `clocksource_list`가 가장 높은 등급의 `clocksource`인 것을 알기 때문에 목록에서 쉽게 얻을 수 있습니다. 최고 등급의 클럭 소스를 찾은 다음 다음으로 전환합니다:
 
 ```C
 if (curr_clocksource != best && !timekeeping_notify(best)) {
@@ -330,7 +349,7 @@ if (curr_clocksource != best && !timekeeping_notify(best)) {
 }
 ```
 
-이 작업의 결과는 `dmesg` 출력에서 확인할 수 있습니다.
+이 작업의 결과는 `dmesg`출력에서 볼 수 있습니다:
 
 ```
 $ dmesg | grep Switched
@@ -338,9 +357,9 @@ $ dmesg | grep Switched
 [    2.452966] clocksource: Switched to clocksource tsc
 ```
 
-`dmesg` 출력(우리의 경우 `hpet`과 `tsc`)에서 두 개의 클럭 소스를 볼 수 있다는 점에 주의하십시오. 사실 특정 하드웨어에 많은 다른 시계 소스가 있을 수 있습니다. 그래서 리눅스 커널은 등록된 모든 클럭 소스에 대해 알고 있으며, 새로운 클럭 소스의 등록 후 매번 더 좋은 등급을 가진 클럭 소스로 전환합니다.
+`dmesg`출력(우리의 경우 `hpet`와 `tsc`)에서 두 클럭 소스를 볼 수 있습니다. 예, 실제로 특정 하드웨어에는 다양한 클럭 소스가 있을 수 있습니다. 따라서 리눅스 커널은 등록된 모든 클럭 소스를 알며 새로운 클럭 소스를 등록한 다음 매번 더 좋은 등급의 클럭 소스로 전환합니다.
 
-[kernel/time/clocksource.c](https://github.com/torvalds/linux/tree/master/kernel/time/clocksource.c) 소스 코드 파일의 하단을 살펴보면 [sysfs](https://en.wikipedia.org/wiki/Sysfs) 인터페이스가 있음을 알 수 있습니다. 기본 초기화는 장치 초기화 통화 중에 호출되는 `init_clocksource_sysfs` 기능에서 발생합니다. `init_clocksource_sysfs` 기능의 구현에 대해 알아봅시다.
+[kernel/time/clocksource.c](https://github.com/torvalds/linux/tree/master/kernel/time/clocksource.c)소스 코드 파일의 맨 아래를 보면, [sysfs](https://en.wikipedia.org/wiki/Sysfs)인터페이스를 볼 수 있습니다. `initcalls`장치가 호출되는 동안 `init_clocksource_sysfs`함수에서 기본 초기화가 일어납니다.`init_clocksource_sysfs`함수의 구현을 봅시다:
 
 ```C
 static struct bus_type clocksource_subsys = {
@@ -370,14 +389,14 @@ static int __init init_clocksource_sysfs(void)
 device_initcall(init_clocksource_sysfs);
 ```
 
-우선 `subys_system_register` 함수의 호출로 클럭소스 하위시스템을 등록한다는 것을 알 수 있습니다. 즉, 이 기능의 호출 후, 다음과 같은 디렉토리를 갖게 됩니다.
+우선 `subsys_system_register`함수의 호출로 `clocksource`서브시스템을 등록하는 것을 볼 수 있습니다. 다시 말해, 함수의 호출 이후 다음 디렉토리를 갖게 됩니다:
 
 ```
 $ pwd
 /sys/devices/system/clocksource
 ```
 
-이 단계 이후, 우리는 다음과 같은 구조로 대표되는 `device_clocksource` 장치의 등록을 볼 수 있습니다.:
+이 단계 후에, 다음 구조체로 나타내지는 `device_clocksource`장치의 등록을 볼 수 있습니다:
 
 ```C
 static struct device device_clocksource = {
@@ -386,42 +405,42 @@ static struct device device_clocksource = {
 };
 ```
 
-세 개의 파일 생성:
+그리고 세 개의 파일을 생성합니다:
 
 * `dev_attr_current_clocksource`;
 * `dev_attr_unbind_clocksource`;
 * `dev_attr_available_clocksource`.
 
-이러한 파일은 시스템의 현재 클럭 소스, 시스템에서 사용 가능한 클럭 소스, 클럭 소스의 바인딩을 해제할 수 있는 인터페이스에 대한 정보를 제공합니다.
+이 파일들은 시스템의 현재 클럭 소스, 시스템에서 사용가능한 클럭 소스, 클럭 소스의 언바인드를 허용하는 인터페이스에 관한 정보를 제공합니다.
 
-`init_clocksource_sysfs` 기능이 실행된 후 다음에서 사용 가능한 클럭 소스에 대한 몇 가지 정보를 찾을 수 있을 것입니다:
+`init_clocksource_sysfs`함수가 실행된 다음, 다음에서 사용가능한 클럭 소스에 관한 일부 정보를 찾을 수 있습니다:
 
 ```
 $ cat /sys/devices/system/clocksource/clocksource0/available_clocksource 
 tsc hpet acpi_pm 
 ```
 
-혹은 예를 들어 시스템의 현재 클럭 소스에 대한 정보:
+또는 현재 클럭 소스에 대한 정보는 다음과 같습니다:
 
 ```
 $ cat /sys/devices/system/clocksource/clocksource0/current_clocksource 
 tsc
 ```
 
-앞부분에서는 `jiffies` 시계소스의 등록을 위한  API를 보았지만, `clocksource` 프레임워크에 관한 세부사항에 대해서는 깊이 파고들지 않았습니다. 이 파트에서 우리는 그것을 했고 새로운 클럭소스 등록과 시스템에서 가장 좋은 등급 값을 가진 클럭소스의 선택을 구현하는 것을 보았습니다. 물론, 클럭소스 프레임워크가 제공하는 API만 있는 것은 아닙니다. `clocksource_list` 등에서 주어진 클럭소스를 제거하기 위해 `clocksource_unregister`와 같은 몇 가지 추가 기능이 있습니다. 그러나 나는 이 기능들을 지금 우리에게 중요하지 않기 때문에 이 부분에 대해서는 설명하지 않을 것입니다. 어쨌든 당신이 그것에 흥미가 있다면, 당신은 그것을 [kernel/time/clocksource.c](https://github.com/torvalds/linux/tree/master/kernel/time/clocksource.c).에서 찾을 수 있습니다.
+이전 파트에서는, `jiffies`클럭 소스 등록을 위한 API을 봤지만 `clocksource`프레임워크에 관한 자세한 내용은 다루지 않았습니다. 이 파트에서 우리는 새로운 클럭 소스 등록을 구현하고 시스템에서 최고의 등급 값을 가진 클럭 소스를 선택하는 것을 봤습니다. 물론, 이것은 `clocksource` 프레임워크가 제공하는 모든 API가 아닙니다. `clocksource_list` 등에서 주어진 클럭 소스를 제거하기 위한 `clocksource_unregister` 같은 몇 가지 추가 함수가 있습니다. 그러나 이 함수는 현재 우리에게 중요하지 않으므로 이 파트에서는 설명하지 않겠습니다. 어쨌거나 흥미가 있으면, [kernel/time/clocksource.c](https://github.com/torvalds/linux/tree/master/kernel/time/clocksource.c)에서 찾아볼 수 있습니다.
 
-이것이 전부입니다~
+그것이 전부입니다.
 
 결론
 --------------------------------------------------------------------------------
 
-리눅스 커널의 타이머와 타이머 관리 관련 내용을 기술한 챕터의 2부 끝부분입니다. 앞부분에서 `jiffies`와 `clocksource`라는 두 가지 개념을 알게 되었습니다. 이 파트에서 우리는 `jiffies` 사용의 몇 가지 예를 보았고 `clocksource` 개념에 대해 더 자세히 알았습니다.
+이것은 리눅스 커널에서 타이머 및 시간 관리에 관해 설명하는 챕터의 두 번째 파트의 끝입니다. 이전 파트에서는 다음과 같은 두 개념: `jiffies` 및 `clocksource`와 접했습니다. 이 파트에서 우리는 `jiffies`사용법의 몇 가지 예시를 봤고 더 자세한 `clocksource` 개념을 알았습니다.
 
-질문이나 제안 사항이 있으면 언제든지 twitter [0xAX](https://twitter.com/0xAX)로 전화를 걸거나 [email](anotherworldofworld@gmail.com)을 보내거나 저에게 [issue](https://github.com/0xAX/linux-insides/issues/new) 걸어주세요. 
+질문이나 제안 사항이 있다면, 트위터 [0xAX](https://twitter.com/0xAX)로 자유롭게 보내거나 제 [이메일](anotherworldofworld@gmail.com)에 넣거나 [이슈](https://github.com/0xAX/linux-insides/issues/new)를 만들어 주세요.
 
-**영어는 내 모국어가 아니라는 것을 명심해주세요. 그리고 어떤 불편함 있었다면 죄송합니다. 만약 당신이 실수를 발견한다면, 나에게[linux-insides](https://github.com/0xAX/linux-insides)로 PR을 보내주십시오.**
+**영어는 모국어가 아니어서 모든 불편한 점은 정말 죄송합니다. 실수를 발견하면 저에게 [linux-insides](https://github.com/0xAX/linux-insides)로 PR을 보내주십시오.**
 
-Links
+링크
 -------------------------------------------------------------------------------
 
 * [x86](https://en.wikipedia.org/wiki/X86)
@@ -429,17 +448,17 @@ Links
 * [uptime](https://en.wikipedia.org/wiki/Uptime)
 * [Ensoniq Soundscape Elite](https://en.wikipedia.org/wiki/Ensoniq_Soundscape_Elite)
 * [RTC](https://en.wikipedia.org/wiki/Real-time_clock)
-* [interrupts](https://en.wikipedia.org/wiki/Interrupt)
+* [인터럽트](https://en.wikipedia.org/wiki/Interrupt)
 * [IBM PC](https://en.wikipedia.org/wiki/IBM_Personal_Computer)
 * [programmable interval timer](https://en.wikipedia.org/wiki/Programmable_interval_timer)
 * [Hz](https://en.wikipedia.org/wiki/Hertz)
-* [nanoseconds](https://en.wikipedia.org/wiki/Nanosecond)
+* [나노 초](https://en.wikipedia.org/wiki/Nanosecond)
 * [dmesg](https://en.wikipedia.org/wiki/Dmesg)
-* [time stamp counter](https://en.wikipedia.org/wiki/Time_Stamp_Counter)
-* [loadable kernel module](https://en.wikipedia.org/wiki/Loadable_kernel_module)
+* [타임 스탬프 카운터](https://en.wikipedia.org/wiki/Time_Stamp_Counter)
+* [로드 가능한 커널 모듈](https://en.wikipedia.org/wiki/Loadable_kernel_module)
 * [IA64](https://en.wikipedia.org/wiki/IA-64)
 * [watchdog](https://en.wikipedia.org/wiki/Watchdog_timer)
-* [clock rate](https://en.wikipedia.org/wiki/Clock_rate)
-* [mutex](https://en.wikipedia.org/wiki/Mutual_exclusion)
+* [클럭 속도](https://en.wikipedia.org/wiki/Clock_rate)
+* [뮤텍스](https://en.wikipedia.org/wiki/Mutual_exclusion)
 * [sysfs](https://en.wikipedia.org/wiki/Sysfs)
-* [previous part](https://0xax.gitbooks.io/linux-insides/content/Timers/linux-timers-1.html)
+* [이전 파트](https://0xax.gitbooks.io/linux-insides/content/Timers/linux-timers-1.html)

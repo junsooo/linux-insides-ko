@@ -1,12 +1,12 @@
-Interrupts and Interrupt Handling. Part 8.
+인터럽트와 인터럽트 처리. Part 8.
 ================================================================================
 
-Non-early initialization of the IRQs
+IRQ의 초기가 아닐때의 초기화
 --------------------------------------------------------------------------------
 
-This is the eighth part of the Interrupts and Interrupt Handling in the Linux kernel [chapter](https://0xax.gitbooks.io/linux-insides/content/Interrupts/index.html) and in the previous [part](https://0xax.gitbooks.io/linux-insides/content/Interrupts/linux-interrupts-7.html) we started to dive into the external hardware [interrupts](https://en.wikipedia.org/wiki/Interrupt_request_%28PC_architecture%29). We looked on the implementation of the `early_irq_init` function from the [kernel/irq/irqdesc.c](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/kernel/irq/irqdesc.c) source code file and saw the initialization of the `irq_desc` structure in this function. Remind that `irq_desc` structure (defined in the [include/linux/irqdesc.h](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/include/linux/irqdesc.h#L46) is the foundation of interrupt management code in the Linux kernel and represents an interrupt descriptor. In this part we will continue to dive into the initialization stuff which is related to the external hardware interrupts.
+이것은 리눅스 커널에서 인터럽트와 인터럽트 처리 [챕터](https://junsoolee.gitbook.io/linux-insides-ko/summary/interrupts)의 8번째 파트이며 이전 [파트](https://junsoolee.gitbook.io/linux-insides-ko/summary/interrupts/linux-interrupts-7)에서 우리는 외부 하드웨어 [인터럽트](https://en.wikipedia.org/wiki/Interrupt_request_%28PC_architecture%29)를 알아보기 시작했습니다. [kernel/irq/irqdesc.c](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/kernel/irq/irqdesc.c) 소스 코드 파일에서 `early_irq_init` 함수의 구현을 살펴보고 이 함수에서 `irq_desc` 구조체의 초기화를 보았습니다. `irq_desc` 구조체([include/linux/irqdesc.h](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/include/linux/irqdesc.h#L46)에 정의 됨)는 리눅스 커널의 인터럽트 관리 코드의 기초이며 인터럽트 디스크립터를 나타냅니다. 이 파트에서 우리는 외부 하드웨어 인터럽트와 관련이 있는 초기화에 대해 계속 알아볼 것입니다.
 
-Right after the call of the `early_irq_init` function in the [init/main.c](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/init/main.c) we can see the call of the `init_IRQ` function. This function is architecture-specific and defined in the [arch/x86/kernel/irqinit.c](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/kernel/irqinit.c). The `init_IRQ` function makes initialization of the `vector_irq` [percpu](https://0xax.gitbooks.io/linux-insides/content/Concepts/linux-cpu-1.html) variable that defined in the same [arch/x86/kernel/irqinit.c](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/kernel/irqinit.c) source code file:
+[init/main.c](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/init/main.c)에서 `early_irq_init` 함수를 호출 한 직후에 우리는 `init_IRQ` 함수의 호출을 볼 수 있습니다. 이 기능은 아키텍처에 따라 다르며 [arch/x86/kernel/irqinit.c](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/kernel/irqinit.c)에 정의되어 있습니다. `init_IRQ` 함수는 동일한 [arch/x86/kernel/irqinit.c](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/kernel/irqinit.c) 소스 코드 파일에 정의 된 `vector_irq` [percpu](https://0xax.gitbooks.io/linux-insides/content/Concepts/linux-cpu-1.html) 변수를 초기화합니다. :
 
 ```C
 ...
@@ -16,19 +16,19 @@ DEFINE_PER_CPU(vector_irq_t, vector_irq) = {
 ...
 ```
 
-and represents `percpu` array of the interrupt vector numbers. The `vector_irq_t` defined in the [arch/x86/include/asm/hw_irq.h](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/arch/x86/include/asm/hw_irq.h) and expands to the:
+그리고 인터럽트 벡터 번호의 `percpu`배열을 나타냅니다. `vector_irq_t`는 [arch/x86/include/asm/hw_irq.h](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/arch/x86/include/asm/hw_irq.h)에 정의 되어 있고, 다음으로 확장합니다.:
 
 ```C
 typedef int vector_irq_t[NR_VECTORS];
 ```
 
-where `NR_VECTORS` is count of the vector number and as you can remember from the first [part](https://0xax.gitbooks.io/linux-insides/content/Interrupts/linux-interrupts-1.html) of this chapter it is `256` for the [x86_64](https://en.wikipedia.org/wiki/X86-64):
+여기서 NR_VECTORS는 벡터 번호의 개수이라는 것을 이 챕터의 첫번째 [파트](https://junsoolee.gitbook.io/linux-insides-ko/summary/interrupts/linux-interrupts-1)에서 알 수 있습니다. [x86_64](https://en.wikipedia.org/wiki/X86-64)의 경우 `256`입니다.
 
 ```C
 #define NR_VECTORS                       256
 ```
 
-So, in the start of the `init_IRQ` function we fill the `vector_irq` [percpu](https://0xax.gitbooks.io/linux-insides/content/Concepts/linux-cpu-1.html) array with the vector number of the `legacy` interrupts:
+이제 `init_IRQ` 함수의 시작에서 우리는 `legacy` 인터럽트의 벡터 번호로 `vector_irq` [percpu](https://junsoolee.gitbook.io/linux-insides-ko/summary/concepts/linux-cpu-1) 배열을 채 웁니다. :
 
 ```C
 void __init init_IRQ(void)
@@ -43,7 +43,7 @@ void __init init_IRQ(void)
 }
 ```
 
-This `vector_irq` will be used during the first steps of an external hardware interrupt handling in the `do_IRQ` function from the [arch/x86/kernel/irq.c](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/arch/x86/kernel/irq.c):
+이 `vector_irq`는 [arch/x86/kernel/irq.c](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/arch/x86/kernel/irq.c)의 `do_IRQ` 함수에서 외부 하드웨어 인터럽트 처리의 첫 단계 동안 사용됩니다. :
 
 ```C
 __visible unsigned int __irq_entry do_IRQ(struct pt_regs *regs)
@@ -66,7 +66,7 @@ __visible unsigned int __irq_entry do_IRQ(struct pt_regs *regs)
 }
 ```
 
-Why is `legacy` here? Actually all interrupts are handled by the modern [IO-APIC](https://en.wikipedia.org/wiki/Advanced_Programmable_Interrupt_Controller#I.2FO_APICs) controller. But these interrupts (from `0x30` to `0x3f`) by legacy interrupt-controllers like [Programmable Interrupt Controller](https://en.wikipedia.org/wiki/Programmable_Interrupt_Controller). If these interrupts are handled by the `I/O APIC` then this vector space will be freed and re-used. Let's look on this code closer. First of all the `nr_legacy_irqs` defined in the [arch/x86/include/asm/i8259.h](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/arch/x86/include/asm/i8259.h) and just returns the `nr_legacy_irqs` field from the `legacy_pic` structure:
+왜 `legacy` 가 여기에 있을까요? 실제로 모든 인터럽트는 최신 [IO-APIC](https://en.wikipedia.org/wiki/Advanced_Programmable_Interrupt_Controller#I.2FO_APICs) 컨트롤러에 의해 처리됩니다. 그러나 [Programmable Interrupt Controller](https://en.wikipedia.org/wiki/Programmable_Interrupt_Controller)와 같은 레거시 인터럽트 컨트롤러에 의한 이러한 인터럽트 (`0x30`에서`0x3f`)가 `I / O APIC`에 의해 처리되면 이 벡터 공간은 해제되고 재사용됩니다. 이 코드를 자세히 살펴 봅시다. 우선 [arch/x86/include/asm/i8259.h](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/arch/x86/include/asm/i8259.h)에 정의 된 모든 `nr_legacy_irqs`는 `legacy_pic` 구조체에서 `nr_legacy_irqs` 필드를 반환합니다. :
 
 ```C
 static inline int nr_legacy_irqs(void)
@@ -75,7 +75,7 @@ static inline int nr_legacy_irqs(void)
 }
 ```
 
-This structure defined in the same header file and represents non-modern programmable interrupts controller:
+이 구조는 동일한 헤더 파일에 정의되어 있으며 현대적이지 않은 프로그래밍 가능한 인터럽트 컨트롤러를 나타냅니다. :
 
 ```C
 struct legacy_pic {
@@ -90,33 +90,31 @@ struct legacy_pic {
         void (*make_irq)(unsigned int irq);
 };
 ```
-
-Actual default maximum number of the legacy interrupts represented by the `NR_IRQ_LEGACY` macro from the [arch/x86/include/asm/irq_vectors.h](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/arch/x86/include/asm/irq_vectors.h):
+레거시 인터럽트의 실제 기본 최대 수는 [arc/x86/include/asm/irq_vectors.h](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/arch/x86/include/asm/irq_vectors.h)에 있는 `NR_IRQ_LEGACY` 매크로로 표현합니다. :
 
 ```C
 #define NR_IRQS_LEGACY                    16
 ```
 
-In the loop we are accessing the `vecto_irq` per-cpu array with the `per_cpu` macro by the `IRQ0_VECTOR + i` index and write the legacy vector number there. The `IRQ0_VECTOR` macro defined in the [arch/x86/include/asm/irq_vectors.h](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/arch/x86/include/asm/irq_vectors.h) header file and expands to the `0x30`:
+루프에서 우리는 `IRQ0_VECTOR + i` 인덱스에 의해 `per_cpu` 매크로를 사용하여 CPU 당 배열인 `vecto_irq` 에 접근하고, 그곳에 레거시 벡터 번호를 씁니다. [arch/x86/include/asm/irq_vectors.h](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/arch/x86/include/asm/irq_vectors.h) 헤더 파일에 정의 된 `IRQ0_VECTOR` 매크로는 `0x30`으로 확장됩니다. :
 
 ```C
 #define FIRST_EXTERNAL_VECTOR           0x20
 
 #define IRQ0_VECTOR                     ((FIRST_EXTERNAL_VECTOR + 16) & ~15)
 ```
+왜 여기에 `0x30`이 있을까요? `0` 부터 `31`까지의 첫 32 개의 벡터 번호는 프로세서가 예약하고 아키텍처 기반의 예외 및 인터럽트 처리에 사용된다는 것을 이 챕터의 첫 번째 [파트](https://junsoolee.gitbook.io/linux-insides-ko/summary/interrupts/linux-interrupts-1)에서 배웠습니다. `0x30`부터 `0x3f`까지의 벡터 번호는 [ISA](https://en.wikipedia.org/wiki/Industry_Standard_Architecture) 용으로 예약되어 있습니다. 즉, `32`와 동일한 `IRQ0_VECTOR`의 `vector_irq`를 `IRQ0_VECTOR + 16` (`0x30` 이전)로 채운다는 것을 의미합니다.
 
-Why is `0x30` here? You can remember from the first [part](https://0xax.gitbooks.io/linux-insides/content/Interrupts/linux-interrupts-1.html) of this chapter that first 32 vector numbers from `0` to `31` are reserved by the processor and used for the processing of architecture-defined exceptions and interrupts. Vector numbers from `0x30` to `0x3f` are reserved for the [ISA](https://en.wikipedia.org/wiki/Industry_Standard_Architecture). So, it means that we fill the `vector_irq` from the `IRQ0_VECTOR` which is equal to the `32` to the `IRQ0_VECTOR + 16` (before the `0x30`).
-
-In the end of the `init_IRQ` function we can see the call of the following function:
+[arch/x86/kernel/x86_init.c](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/arch/x86/kernel/x86_init.c) 소스 코드 파일의 `init_IRQ` 함수 끝에서 다음 함수의 호출을 볼 수 있습니다. :
 
 ```C
 x86_init.irqs.intr_init();
 ```
 
-from the [arch/x86/kernel/x86_init.c](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/arch/x86/kernel/x86_init.c) source code file. If you have read [chapter](https://0xax.gitbooks.io/linux-insides/content/Initialization/index.html) about the Linux kernel initialization process, you can remember the `x86_init` structure. This structure contains a couple of files which are points to the function related to the platform setup (`x86_64` in our case), for example `resources` - related with the memory resources, `mpparse` - related with the parsing of the [MultiProcessor Configuration Table](https://en.wikipedia.org/wiki/MultiProcessor_Specification) table and etc.). As we can see the `x86_init` also contains the `irqs` field which contains three following fields:
+리눅스 커널 초기화 과정에 대한 [챕터](https://junsoolee.gitbook.io/linux-insides-ko/summary/initialization)를 읽었다면 `x86_init` 구조체를 기억할 수 있을 것입니다. 이 구조체에는 플랫폼 설정과 관련된 기능(우리의 경우 `x86_64`)을 가리키는 몇 개의 파일이 포함되어 있습니다. 예를 들어 메모리 자원과 관련된 `resources`. [MultiProcessor Configuration Table](https://en.wikipedia.org/wiki/MultiProcessor_Specification) 테이블을 파싱하는 것과 관련된 'mpparse' 등이 있습니다. 우리가 볼 수 있듯, `x86_init`에는 세 개의 다음 필드를 포함하는 `irqs` 필드도 포함되어 있습니다. :
 
 ```C
-struct x86_init_ops x86_init __initdata 
+struct x86_init_ops x86_init __initdata
 {
 	...
 	...
@@ -132,13 +130,13 @@ struct x86_init_ops x86_init __initdata
 }
 ```
 
-Now, we are interesting in the `native_init_IRQ`. As we can note, the name of the `native_init_IRQ` function contains the `native_` prefix which means that this function is architecture-specific. It defined in the [arch/x86/kernel/irqinit.c](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/kernel/irqinit.c) and executes general initialization of the [Local APIC](https://en.wikipedia.org/wiki/Advanced_Programmable_Interrupt_Controller#Integrated_local_APICs) and initialization of the [ISA](https://en.wikipedia.org/wiki/Industry_Standard_Architecture) irqs. Let's look on the implementation of the `native_init_IRQ` function and will try to understand what occurs there. The `native_init_IRQ` function starts from the execution of the following function:
+이제 우리는 `native_init_IRQ`에 흥미를 가집니다. 우리가 알 수 있듯, `native_init_IRQ` 함수의 이름은 `native_` 접두사를 포함하는데, 이는이 함수가 아키텍처에 따라 다르다는 것을 의미합니다. 이 함수는 [arch/x86/kernel/irqinit.c](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/kernel/irqinit.c)에 정의되어 있으며 [Local APIC](https://en.wikipedia.org/wiki/Advanced_Programmable_Interrupt_Controller#Integrated_local_APICs)의 일반 초기화 및 [ISA](https://en.wikipedia.org/wiki/Industry_Standard_Architecture) irq들의 초기화를 실행합니다. 앞으로 `native_init_IRQ` 함수의 구현을 살펴보고 거기서 발생하는 것들을 이해해봅시다. `native_init_IRQ` 함수는 다음 함수의 실행에서 시작합니다. :
 
 ```C
 x86_init.irqs.pre_vector_init();
 ```
 
-As we can see above, the `pre_vector_init` points to the `init_ISA_irqs` function that defined in the same [source code](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/kernel/irqinit.c) file and as we can understand from the function's name, it makes initialization of the `ISA` related interrupts. The `init_ISA_irqs` function starts from the definition of the `chip` variable which has a `irq_chip` type:
+위에서 볼 수 있듯이 `pre_vector_init`는 동일한 [소스 코드](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/kernel/irqinit.c) 파일에 정의 된 `init_ISA_irqs` 함수를 가리키며 함수 이름에서 알 수 있듯이 ISA 관련 인터럽트를 초기화합니다. `init_ISA_irqs` 함수는 `irq_chip` 형식을 갖는 `chip`변수의 정의로 시작됩니다.
 
 ```C
 void __init init_ISA_irqs(void)
@@ -149,7 +147,7 @@ void __init init_ISA_irqs(void)
 	...
 ```
 
-The `irq_chip` structure defined in the [include/linux/irq.h](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/include/linux/irq.h) header file and represents hardware interrupt chip descriptor. It contains:
+[include/linux/irq.h](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/include/linux/irq.h) 헤더 파일에 정의 된 `irq_chip` 구조체는 하드웨어 인터럽트 칩 디스크립터를 나타냅니다. 이것은 다음을 포함합니다. :
 
 * `name` - name of a device. Used in the `/proc/interrupts`:
 
@@ -161,17 +159,17 @@ $ cat /proc/interrupts
   8:          1          0          0          0          0          0          0          0   IO-APIC   8-edge      rtc0
 ```
 
-look on the last column;
+마지막 열을 보십시오;
 
-* `(*irq_mask)(struct irq_data *data)`  - mask an interrupt source;
-* `(*irq_ack)(struct irq_data *data)` - start of a new interrupt;
-* `(*irq_startup)(struct irq_data *data)` - start up the interrupt;
-* `(*irq_shutdown)(struct irq_data *data)` - shutdown the interrupt
-* and etc.
+* `(*irq_mask)(struct irq_data *data)`  - 인터럽트 소스를 마스킹;
+* `(*irq_ack)(struct irq_data *data)` - 새 인터럽트의 시작;
+* `(*irq_startup)(struct irq_data *data)` - 인터럽트 시작;
+* `(*irq_shutdown)(struct irq_data *data)` - 인터럽트를 종료
+* 등등.
 
-fields. Note that the `irq_data` structure represents set of the per irq chip data passed down to chip functions. It contains `mask` - precomputed bitmask for accessing the chip registers, `irq` - interrupt number, `hwirq` - hardware interrupt number, local to the interrupt domain chip low level interrupt hardware access and etc.
+'irq_data' 구조체는 칩 기능으로 전달 된 irq 당 칩 데이터 세트를 나타냅니다. 여기에는 칩 레지스터에 엑세스하기 위해 사전 계산 된 비트 마스크 인 `mask`,인터럽트 번호인 `irq`, 하드웨어 인터럽트 번호인 `hwirq`, 인터럽트 도메인 칩 하위 레벨 인터럽트 하드웨어 액세스 등이 포함됩니다.
 
-After this depends on the `CONFIG_X86_64` and `CONFIG_X86_LOCAL_APIC` kernel configuration option call the `init_bsp_APIC` function from the [arch/x86/kernel/apic/apic.c](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/arch/x86/kernel/apic/apic.c):
+이 명령은 `CONFIG_X86_64`와 커널 설정 옵션인 `CONFIG_X86_LOCAL_APIC`에 따라 [arch/x86/kernel/apic/apic.c](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/arch/x86/kernel/apic/apic.c)에서 `init_bsp_APIC` 함수를 호출합니다. :
 
 ```C
 #if defined(CONFIG_X86_64) || defined(CONFIG_X86_LOCAL_APIC)
@@ -179,14 +177,14 @@ After this depends on the `CONFIG_X86_64` and `CONFIG_X86_LOCAL_APIC` kernel con
 #endif
 ```
 
-This function makes initialization of the [APIC](https://en.wikipedia.org/wiki/Advanced_Programmable_Interrupt_Controller) of `bootstrap processor` (or processor which starts first). It starts from the check that we found [SMP](https://en.wikipedia.org/wiki/Symmetric_multiprocessing) config (read more about it in the sixth [part](https://0xax.gitbooks.io/linux-insides/content/Initialization/linux-initialization-6.html) of the Linux kernel initialization process chapter) and the processor has `APIC`:
+이 함수는 부트스트랩 프로세서(또는 먼저 시작하는 프로세서)의 [APIC]를 초기화합니다. 이는 [SMP](https://en.wikipedia.org/wiki/Advanced_Programmable_Interrupt_Controller) 설정을 확인하는 것(Linux 커널 초기화 프로세스 챕터의 여섯번째 [파트](https://junsoolee.gitbook.io/linux-insides-ko/summary/initialization/linux-initialization-6)에 자세히 설명되어 있음)에서 시작하며, 이 프로세서에는 `APIC`이 있습니다. :
 
 ```C
 if (smp_found_config || !cpu_has_apic)
 	return;
 ```
 
-In other way we return from this function. In the next step we call the `clear_local_APIC` function from the same source code file that shutdowns the local `APIC` (more about it will be in the chapter about the `Advanced Programmable Interrupt Controller`) and enable `APIC` of the first processor by the setting `unsigned int value` to the `APIC_SPIV_APIC_ENABLED`: 
+이제 이 함수에서 리턴합니다. 다음 단계에서는 로컬 `APIC`(자세한 내용은 '고급 프로그래밍 가능 인터럽트 컨트롤러'에 대한 챕터에서 설명)을 끝내고, `unsigned int value`를 `APIC_SPIV_APIC_ENABLED`로 설정함으로써 첫번째 프로세서의 `APIC`을 가능하게 하는 동일한 소스 코드 파일내의 `clear_local_APIC` 함수를 호출합니다. :
 
 ```C
 value = apic_read(APIC_SPIV);
@@ -194,22 +192,22 @@ value &= ~APIC_VECTOR_MASK;
 value |= APIC_SPIV_APIC_ENABLED;
 ```
 
-and writing it with the help of the `apic_write` function:
+그리고 `apic_write` 함수의 도움으로 이를 write 합니다. :
 
 ```C
 apic_write(APIC_SPIV, value);
 ```
 
-After we have enabled `APIC` for the bootstrap processor, we return to the `init_ISA_irqs` function and in the next step we initialize legacy `Programmable Interrupt Controller` and set the legacy chip and handler for the each legacy irq:
+부트 스트랩 프로세서에 `APIC`를 활성화 한 후 `init_ISA_irqs` 함수로 돌아가 그 다음 단계에서 레거시 `Programmable Interrupt Controller`를 초기화하고 각 레거시 irq에 대한 레거시 칩과 핸들러를 설정합니다. :
 
 ```C
 legacy_pic->init(0);
- 
+
 for (i = 0; i < nr_legacy_irqs(); i++)
     irq_set_chip_and_handler(i, chip, handle_level_irq);
 ```
 
-Where can we find `init` function? The `legacy_pic` defined in the [arch/x86/kernel/i8259.c](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/arch/x86/kernel/i8259.c) and it is:
+`init`함수는 어디에서 찾을 수 있을까요? [arch/x86/kernel/i8259.c](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/arch/x86/kernel/i8259.c)에 정의 된 `legacy_pic`은 다음과 같습니다. :
 
 ```C
 struct legacy_pic *legacy_pic = &default_legacy_pic;
@@ -229,9 +227,9 @@ struct legacy_pic default_legacy_pic = {
 }
 ```
 
-The `init_8259A` function defined in the same source code file and executes initialization of the [Intel 8259](https://en.wikipedia.org/wiki/Intel_8259) ``Programmable Interrupt Controller` (more about it will be in the separate chapter about `Programmable Interrupt Controllers` and `APIC`).
+동일한 소스 코드 파일에 정의 된 `init_8259A` 함수는 [Intel 8259](https://en.wikipedia.org/wiki/Intel_8259) `Programmable Interrupt Controller`의 초기화를 실행합니다. (자세한 내용은 `Programmable Interrupt Controllers`과 `APIC`에 대한 별도의 챕터에 있습니다.)
 
-Now we can return to the `native_init_IRQ` function, after the `init_ISA_irqs` function finished its work. The next step is the call of the `apic_intr_init` function that allocates special interrupt gates which are used by the [SMP](https://en.wikipedia.org/wiki/Symmetric_multiprocessing) architecture for the [Inter-processor interrupt](https://en.wikipedia.org/wiki/Inter-processor_interrupt). The `alloc_intr_gate` macro from the [arch/x86/include/asm/desc.h](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/arch/x86/include/asm/desc.h) used for the interrupt descriptor allocation:
+`init_ISA_irqs` 함수가 작업을 마친 후에, `native_init_IRQ` 함수로 돌아갈 수 있습니다. 다음 단계는 [내부 프로세서 인터럽트] (https://en.wikipedia.org/wiki/Inter-processor_interrupt)를 위해 [SMP](https://en.wikipedia.org/wiki/Symmetric_multiprocessing) 아키텍처에서 사용되는 특수 인터럽트 게이트를 할당하는 `apic_intr_init` 함수를 호출 하는 것입니다. 인터럽트 디스크립터 할당에 사용되는 [arch/x86/include/asm/desc.h](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/arch/x86/include/asm/desc.h)의 `alloc_intr_gate` 매크로가 있습니다. :
 
 ```C
 #define alloc_intr_gate(n, addr)                        \
@@ -241,7 +239,7 @@ do {                                                    \
 } while (0)
 ```
 
-As we can see, first of all it expands to the call of the `alloc_system_vector` function that checks the given vector number in the `used_vectors` bitmap (read previous [part](https://0xax.gitbooks.io/linux-insides/content/Interrupts/linux-interrupts-7.html) about it) and if it is not set in the `used_vectors` bitmap we set it. After this we test that the `first_system_vector` is greater than given interrupt vector number and if it is greater we assign it:
+보시다시피, 우선 이것은 `used_vectors` 비트 맵에서 주어진 벡터 번호를 확인하는 `alloc_system_vector` 함수의 호출로 확장되고 (이전 [파트]에서 볼 수 있음), `used_vectors` 에 설정되지 않은 경우에는 비트 맵을 설정합니다. 그런 다음 우리는 `first_system_vector`가 주어진 인터럽트 벡터 수보다 큰지 테스트하고 더 큰 경우 할당합니다 :
 
 ```C
 if (!test_bit(vector, used_vectors)) {
@@ -253,7 +251,7 @@ if (!test_bit(vector, used_vectors)) {
 }
 ```
 
-We already saw the `set_bit` macro, now let's look on the `test_bit` and the `first_system_vector`. The first `test_bit` macro defined in the [arch/x86/include/asm/bitops.h](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/arch/x86/include/bitops.h) and looks like this:
+우리는 이미 `set_bit` 매크로를 보았습니다. 이제 `test_bit`와 `first_system_vector`를 봅시다. [arch/x86/include/asm/bitops.h](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/arch/x86/include/bitops.h)에 정의 된 첫 번째 `test_bit` 매크로는 다음과 같습니다. :
 
 ```C
 #define test_bit(nr, addr)                      \
@@ -262,7 +260,9 @@ We already saw the `set_bit` macro, now let's look on the `test_bit` and the `fi
          : variable_test_bit((nr), (addr)))
 ```
 
-We can see the [ternary operator](https://en.wikipedia.org/wiki/Ternary_operation) here make a test with the [gcc](https://en.wikipedia.org/wiki/GNU_Compiler_Collection) built-in function `__builtin_constant_p` tests that given vector number (`nr`) is known at compile time. If you're feeling misunderstanding of the `__builtin_constant_p`, we can make simple test:
+
+[삼항 연산자](https://en.wikipedia.org/wiki/Ternary_operation)는 [gcc](https://en.wikipedia.org/wiki/GNU_Compiler_Collection)에 내장된 테스트를 통해 확인할 수 있습니다. 함수 `__builtin_constant_p`는 컴파일 타임에 주어진 벡터 번호(`nr`)가 알려져 있는지 테스트합니다. `__builtin_constant_p`에 대한 잘못된 이해가 있다면 간단한 테스트를 만들 수 있습니다. :
+
 
 ```C
 #include <stdio.h>
@@ -279,7 +279,7 @@ int main() {
 }
 ```
 
-and look on the result:
+그리고 결과를 봅시다. :
 
 ```
 $ gcc test.c -o test
@@ -289,7 +289,7 @@ __builtin_constant_p(PREDEFINED_VAL) is 1
 __builtin_constant_p(100) is 1
 ```
 
-Now I think it must be clear for you. Let's get back to the `test_bit` macro. If the `__builtin_constant_p` will return non-zero, we call `constant_test_bit` function:
+이제 여러분이 이에 대해 명확히 이해했다고 생각합니다. 다시 `test_bit` 매크로로 돌아 갑시다. `__builtin_constant_p`가  0이 아닌 값을 반환하면 `constant_test_bit` 함수를 호출합니다 :
 
 ```C
 static inline int constant_test_bit(int nr, const void *addr)
@@ -300,7 +300,7 @@ static inline int constant_test_bit(int nr, const void *addr)
 }
 ```
 
-and the `variable_test_bit` in other way:
+다른 방법으로 `variable_test_bit` 가 있습니다.:
 
 ```C
 static inline int variable_test_bit(int nr, const void *addr)
@@ -313,7 +313,7 @@ static inline int variable_test_bit(int nr, const void *addr)
 }
 ```
 
-What's the difference between two these functions and why do we need in two different functions for the same purpose? As you already can guess main purpose is optimization. If we will write simple example with these functions:
+이 두 기능의 차이점은 무엇이고, 동일한 목적을 위해 두 개의 다른 기능이 필요한 이유는 무엇일까요? 이미 짐작할 수 있듯이 주된 목적은 최적화입니다. 다음 함수를 사용하여 간단한 예를 작성하면 다음과 같습니다. :
 
 ```C
 #define CONST 25
@@ -326,7 +326,7 @@ int main() {
 }
 ```
 
-and will look on the assembly output of our example we will see following assembly code:
+예제의 어셈블리 출력을 살펴보면 `constant_test_bit`에 대한 다음 어셈블리 코드가 표시됩니다.
 
 ```assembly
 pushq	%rbp
@@ -337,7 +337,7 @@ movl	$25, %edi
 call	constant_test_bit
 ```
 
-for the `constant_test_bit`, and:
+그리고 `variable_test_bit`에 대한 어셈블리 코드가 표시됩니다.:
 
 ```assembly
 pushq	%rbp
@@ -351,10 +351,10 @@ movl	%eax, %edi
 call	variable_test_bit
 ```
 
-for the `variable_test_bit`. These two code listings starts with the same part, first of all we save base of the current stack frame in the `%rbp` register. But after this code for both examples is different. In the first example we put `$268435456` (here the `$268435456` is our second parameter - `0x10000000`) to the `esi` and `$25` (our first parameter) to the `edi` register and call `constant_test_bit`. We put function parameters to the `esi` and `edi` registers because as we are learning Linux kernel for the `x86_64` architecture we use `System V AMD64 ABI` [calling convention](https://en.wikipedia.org/wiki/X86_calling_conventions). All is pretty simple. When we are using predefined constant, the compiler can just substitute its value. Now let's look on the second part. As you can see here, the compiler can not substitute value from the `nr` variable. In this case compiler must calculate its offset on the program's [stack frame](https://en.wikipedia.org/wiki/Call_stack). We subtract `16` from the `rsp` register to allocate stack for the local variables data and put the `$24` (value of the `nr` variable) to the `rbp` with offset `-4`. Our stack frame will be like this:
+이 두 코드 목록은 같은 부분으로 시작합니다. 우선 현재 스택 프레임의 기본을 `%rbp` 레지스터에 저장합니다. 하지만 두 예에서 이 코드는 다릅니다. 첫 번째 예에서는 `$268435456`(여기서 $268435456은 두 번째 매개 변수 인 `0x10000000`)을 `esi`에, `$25`(첫 번째 매개 변수)를 `edi` 레지스터에 넣고 `constant_test_bit`를 호출합니다. x86_64 아키텍처를 위한 리눅스 커널을 배우면서 System V AMD64 ABI(호출 규칙)를 사용하기 때문에 함수 파라미터를 esi와 edi 레지스터에 넣었습니다. 이 작업은 모두 매우 간단합니다. 우리가 미리 정의 된 상수를 사용할 때, 컴파일러가 그 값을 대체 할 수 있습니다. 이제 두 번째 예를 살펴 보겠습니다. 여기서 볼 수 있듯이 컴파일러가 `nr` 변수의 값을 대체 할 수 없습니다. 이 경우 컴파일러는 프로그램의 [스택 프레임](https://ko.wikipedia.org/wiki/Call_stack)에서 오프셋을 계산해야합니다. 로컬 변수 데이터에 스택을 할당하기 위해 rsp 레지스터에서 `16`을 빼고 `$24` (`nr` 변수의 값)를 `-4` 오프셋을 가진 `rbp`에 넣습니다. 스택 프레임은 다음과 같습니다. :
 
 ```
-         <- stack grows 
+         <- stack grows
 
 	          %[rbp]
                  |
@@ -367,9 +367,9 @@ for the `variable_test_bit`. These two code listings starts with the same part, 
               %[rsp]
 ```
 
-After this we put this value to the `eax`, so `eax` register now contains value of the `nr`. In the end we do the same that in the first example, we put the `$268435456` (the first parameter of the `variable_test_bit` function) and the value of the `eax` (value of `nr`) to the `edi` register (the second parameter of the `variable_test_bit function`). 
+그런 다음 이 값을 `eax`에 넣습니다. 따라서 `eax` 레지스터는 이제 `nr`의 값을 포함합니다. 결국 우리는 첫 번째 예에서 `$ 268435456`(`variable_test_bit` 함수의 첫 번째 매개 변수)과 `eax`의 값(`nr`의 값)을 `edi` 레지스터(`variable_test_bit` 함수의 두 번째 매개 변수)에 넣는 과정과 동일하게 수행합니다.
 
-The next step after the `apic_intr_init` function will finish its work is the setting interrupt gates from the `FIRST_EXTERNAL_VECTOR` or `0x20` to the `0x256`:
+`apic_intr_init` 함수가 이 작업을 완료 한 후, 다음 단계는`FIRST_EXTERNAL_VECTOR` 또는 `0x20` 에서 `0x256`에 이르는 인터럽트 게이트 설정입니다. :
 
 ```C
 i = FIRST_EXTERNAL_VECTOR;
@@ -383,7 +383,7 @@ for_each_clear_bit_from(i, used_vectors, first_system_vector) {
 }
 ```
 
-But as we are using the `for_each_clear_bit_from` helper, we set only non-initialized interrupt gates. After this we use the same `for_each_clear_bit_from` helper to fill the non-filled interrupt gates in the interrupt table with the `spurious_interrupt`:
+그러나 우리는 `for_each_clear_bit_from` 헬퍼를 사용하면서 초기화되지 않은 인터럽트 게이트만 설정했습니다. 이후에는  동일한 `for_each_clear_bit_from` 헬퍼를 사용하여 인터럽트 테이블의 채워지지 않은 인터럽트 게이트를 `spurious_interrupt`로 채웁니다. :
 
 ```C
 #ifdef CONFIG_X86_LOCAL_APIC
@@ -392,29 +392,30 @@ for_each_clear_bit_from(i, used_vectors, NR_VECTORS)
 #endif
 ```
 
-Where the `spurious_interrupt` function represent interrupt handler for the `spurious` interrupt. Here the `used_vectors` is the `unsigned long` that contains already initialized interrupt gates. We already filled first `32` interrupt vectors in the `trap_init` function from the [arch/x86/kernel/setup.c](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/arch/x86/kernel/setup.c) source code file:
+`spurious_interrupt` 함수는 `spurious` 인터럽트를 위한 인터럽트 핸들러를 나타냅니다. 여기서 `used_vectors`는 이미 초기화 된 인터럽트 게이트를 포함하는 `unsigned long`입니다. 우리는 이미 [arch/x86/kernel/setup.c](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/arch/x86/kernel/setup.c) 소스 코드 파일에서 `trap_init` 함수의 첫 번째 `32` 인터럽트 벡터를 채웠습니다. :
 
 ```C
 for (i = 0; i < FIRST_EXTERNAL_VECTOR; i++)
     set_bit(i, used_vectors);
 ```
 
-You can remember how we did it in the sixth [part](https://0xax.gitbooks.io/linux-insides/content/Interrupts/linux-interrupts-6.html) of this chapter.
+이 장의 여섯 번째 [파트](https://junsoolee.gitbook.io/linux-insides-ko/summary/interrupts/linux-interrupts-6)에서 이를 어떻게 수행했는지 보았습니다.
 
-In the end of the `native_init_IRQ` function we can see the following check:
+`native_init_IRQ` 함수의 끝에서 우리는 다음과 같은 점검을 볼 수 있습니다. :
 
 ```C
 if (!acpi_ioapic && !of_ioapic && nr_legacy_irqs())
 	setup_irq(2, &irq2);
 ```
 
-First of all let's deal with the condition. The `acpi_ioapic` variable represents existence of [I/O APIC](https://en.wikipedia.org/wiki/Advanced_Programmable_Interrupt_Controller#I.2FO_APICs). It defined in the [arch/x86/kernel/acpi/boot.c](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/arch/x86/kernel/acpi/boot.c). This variable set in the `acpi_set_irq_model_ioapic` function that called during the processing `Multiple APIC Description Table`. This occurs during initialization of the architecture-specific stuff in the [arch/x86/kernel/setup.c](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/arch/x86/kernel/setup.c) (more about it we will know in the other chapter about [APIC](https://en.wikipedia.org/wiki/Advanced_Programmable_Interrupt_Controller)). Note that the value of the `acpi_ioapic` variable depends on the `CONFIG_ACPI` and `CONFIG_X86_LOCAL_APIC` Linux kernel configuration options. If these options did not set, this variable will be just zero:
+우선 조건을 살펴 봅시다. `acpi_ioapic` 변수는 [I/O APIC](https://en.wikipedia.org/wiki/Advanced_Programmable_Interrupt_Controller#I.2FO_APICs)의 유무를 나타냅니다. 이는 [arch/x86/kernel/acpi/boot.c](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/arch/x86/kernel/acpi/boot.c)에 정의되어 있습니다. 이 변수는 `Multiple APIC Description Table`을 처리하는동안 호출 된 `acpi_set_irq_model_ioapic` 함수에 설정되어 있습니다. 이것은 [arch/x86/kernel/setup.c](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/arch/x86/kernel/setup.c)에서 아키텍처 특정 항목을 초기화하는 동안 발생합니다(자세한 내용은 [APIC](https://en.wikipedia.org/wiki/Advanced_Programmable_Interrupt_Controller)에 대해 다루는 다른 챕터에서 알 수 있습니다). `acpi_ioapic` 변수의 값은 `CONFIG_ACPI`와  Linux 커널 설정 옵션 `CONFIG_X86_LOCAL_APIC`에 따라 다릅니다. 이 옵션을 설정하지 않으면이 변수는 0이됩니다. :
 
 ```C
 #define acpi_ioapic 0
 ```
 
-The second condition - `!of_ioapic && nr_legacy_irqs()` checks that we do not use [Open Firmware](https://en.wikipedia.org/wiki/Open_Firmware) `I/O APIC` and legacy interrupt controller. We already know about the `nr_legacy_irqs`. The second is `of_ioapic` variable defined in the [arch/x86/kernel/devicetree.c](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/arch/x86/kernel/devicetree.c) and initialized in the `dtb_ioapic_setup` function that build information about `APICs` in the [devicetree](https://en.wikipedia.org/wiki/Device_tree). Note that `of_ioapic` variable depends on the `CONFIG_OF` Linux kernel configuration option. If this option is not set, the value of the `of_ioapic` will be zero too:
+두 번째 조건인 `!of_ioapic && nr_legacy_irqs()` 는 [Open Firmware](https://en.wikipedia.org/wiki/Open_Firmware) `I/O APIC`와 레거시 인터럽트 컨트롤러를 사용하지 않는지 확인합니다. 우리는 이미 `nr_legacy_irqs`에 대해 알고 있습니다. 두 번째는 [arch/x86/kernel/devicetree.c]에 정의 된 `of_ioapic` 변수이며, [devicetree](https://en.wikipedia.org/wiki/Device_tree)에서 `APICs` 에 대한 정보를 빌드하는 `dtb_ioapic_setup` 함수에서 초기화됩니다. `of_ioapic` 변수는 Linux 커널 설정 옵션 `CONFIG_OF` 에 따라 다릅니다. 이 옵션을 설정하지 않으면 `of_ioapic`의 값도 0이 됩니다 :
+
 
 ```C
 #ifdef CONFIG_OF
@@ -430,13 +431,13 @@ extern int of_ioapic;
 #endif
 ```
 
-If the condition will return non-zero value we call the:
+조건이 0이 아닌 값을 반환하면 다음 함수를 호출합니다. :
 
 ```C
 setup_irq(2, &irq2);
 ```
 
-function. First of all about the `irq2`. The `irq2` is the `irqaction` structure that defined in the [arch/x86/kernel/irqinit.c](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/arch/x86/kernel/irqinit.c) source code file and represents `IRQ 2` line that is used to query devices connected cascade:
+우선 `irq2`에 대해 알아봅시다. `irq2`는 [arch/x86/kernel/irqinit.c](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/arch/x86/kernel/irqinit.c) 소스 코드 파일에 정의 된 `irqaction` 구조체이며 연결된 종속 장치를 조회하는 데 사용되는 `IRQ 2` 라인을 나타냅니다.
 
 ```C
 static struct irqaction irq2 = {
@@ -446,37 +447,37 @@ static struct irqaction irq2 = {
 };
 ```
 
-Some time ago interrupt controller consisted of two chips and one was connected to second. The second chip that was connected to the first chip via this `IRQ 2` line. This chip serviced lines from `8` to `15` and after this lines of the first chip. So, for example [Intel 8259A](https://en.wikipedia.org/wiki/Intel_8259) has following lines:
+앞에서 인터럽트 컨트롤러는 두 개의 칩으로 구성되었고 하나는 두 번째 칩에 연결되었습니다. 이 `IRQ 2` 라인을 통해 첫 번째 칩에 연결된 두 번째 칩은 `8`부터 `15`까지의 라인들을 서비스했고, 이 다음에 첫번째 라인을 서비스했습니다. 예를 들어 [Intel 8259A](https://en.wikipedia.org/wiki/Intel_8259)는 다음과 같습니다. :
 
-* `IRQ 0`  - system time;
-* `IRQ 1`  - keyboard;
-* `IRQ 2`  - used for devices which are cascade connected;
+* `IRQ 0`  - 시스템 시간;
+* `IRQ 1`  - 키보드;
+* `IRQ 2`  - 종속 연결 된 장치들에 사용;
 * `IRQ 8`  - [RTC](https://en.wikipedia.org/wiki/Real-time_clock);
-* `IRQ 9`  - reserved;
-* `IRQ 10` - reserved;
-* `IRQ 11` - reserved;
-* `IRQ 12` - `ps/2` mouse;
-* `IRQ 13` - coprocessor;
-* `IRQ 14` - hard drive controller;
-* `IRQ 1`  - reserved;
-* `IRQ 3`  - `COM2` and `COM4`;
-* `IRQ 4`  - `COM1` and `COM3`;
+* `IRQ 9`  - 예약됨;
+* `IRQ 10` - 예약됨;
+* `IRQ 11` - 예약됨;
+* `IRQ 12` - `ps/2` 마우스;
+* `IRQ 13` - 보조 프로세서;
+* `IRQ 14` - 하드 드라이브 컨트롤러;
+* `IRQ 1`  - 예약됨;
+* `IRQ 3`  - `COM2` 와 `COM4`;
+* `IRQ 4`  - `COM1` 와 `COM3`;
 * `IRQ 5`  - `LPT2`;
-* `IRQ 6`  - drive controller;
+* `IRQ 6`  - 드라이브 컨트롤러;
 * `IRQ 7`  - `LPT1`.
 
-The `setup_irq` function defined in the [kernel/irq/manage.c](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/kernel/irq/manage.c) and takes two parameters:
+[kernel/irq/manage.c](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/kernel/irq/manage.c)에 정의 된 `setup_irq` 함수는 두 개의 매개 변수를 사용합니다. :
 
-* vector number of an interrupt;
-* `irqaction` structure related with an interrupt.
+* 인터럽트의 벡터 수;
+* 인터럽트와 관련 된 `irqaction` 구조체.
 
-This function initializes interrupt descriptor from the given vector number at the beginning:
+이 함수는 처음에 주어진 벡터 번호에서 인터럽트 디스크립터를 초기화합니다. :
 
 ```C
 struct irq_desc *desc = irq_to_desc(irq);
 ```
 
-And call the `__setup_irq` function that setups given interrupt: 
+그리고 인터럽트가 주어지면 설정하는 `__setup_irq` 함수를 호출합니다. :
 
 ```C
 chip_bus_lock(desc);
@@ -485,37 +486,38 @@ chip_bus_sync_unlock(desc);
 return retval;
 ```
 
-Note that the interrupt descriptor is locked during `__setup_irq` function will work. The `__setup_irq` function makes many different things: It creates a handler thread when a thread function is supplied and the interrupt does not nest into another interrupt thread, sets the flags of the chip, fills the `irqaction` structure and many many more.
+`__setup_irq` 함수가 진행되는 동안 인터럽트 디스크립터가 잠기게 됩니다. `__setup_irq` 함수는 여러 가지를 만듭니다: 스레드 함수가 제공되고 인터럽트가 다른 인터럽트 스레드에 중첩되지 않을 때 핸들러 스레드를 만들고, 칩의 플래그를 설정하고. `irqaction`를 채우는 등의 많고 많은 일을 합니다.
 
-All of the above it creates `/prov/vector_number` directory and fills it, but if you are using modern computer all values will be zero there:
+위의 모든 것들은 `/prov/vector_number` 디렉토리를 생성하고 채웁니다. 그러나 최신 컴퓨터를 사용하는 경우 모든 값은 0입니다.
 
 ```
 $ cat /proc/irq/2/node
 0
 
-$cat /proc/irq/2/affinity_hint 
+$cat /proc/irq/2/affinity_hint
 00
 
-cat /proc/irq/2/spurious 
+cat /proc/irq/2/spurious
 count 0
 unhandled 0
 last_unhandled 0 ms
 ```
 
-because probably `APIC` handles interrupts on the our machine.
+아마도 `APIC`는 우리 컴퓨터의 인터럽트를 처리하기 때문입니다.
 
-That's all.
+이것으로 끝입니다.
 
-Conclusion
+결론
 --------------------------------------------------------------------------------
 
-It is the end of the eighth part of the [Interrupts and Interrupt Handling](https://0xax.gitbooks.io/linux-insides/content/Interrupts/index.html) chapter and we continued to dive into external hardware interrupts in this part. In the previous part we started to do it and saw early initialization of the `IRQs`. In this part we already saw non-early interrupts initialization in the `init_IRQ` function. We saw initialization of the `vector_irq` per-cpu array which is store vector numbers of the interrupts and will be used during interrupt handling and initialization of other stuff which is related to the external hardware interrupts.
 
-In the next part we will continue to learn interrupts handling related stuff and will see initialization of the `softirqs`.
+[인터럽트와 인터럽트 처리](https://junsoolee.gitbook.io/linux-insides-ko/summary/interrupts) 챕터의 8 번째 파트가 끝났으며, 우리는 이 파트에서 외부 하드웨어 인터럽트에 대해 계속 연구했습니다. 이전 파트에서 우리는 이를 시작했고 `IRQs`의 초기 초기화를 보았습니다. 그리고 이 파트에서 우리는 이미 `init_IRQ` 함수에서 초기 인터럽트가 아닌 인터럽트를 보았습니다. 인터럽트의 벡터 번호를 저장하는 CPU 당 `vector_irq`의 초기화를 보았으며, 외부 하드웨어 인터럽트와 관련된 다른 것들의 인터럽트 처리 및 초기화 중에 사용될 것입니다.
 
-If you have any questions or suggestions write me a comment or ping me at [twitter](https://twitter.com/0xAX).
+다음 파트에서는 관련 내용을 처리하는 인터럽트를 계속 배우고 `softirqs`의 초기화를 보게 될 것입니다.
 
-**Please note that English is not my first language, And I am really sorry for any inconvenience. If you find any mistakes please send me PR to [linux-insides](https://github.com/0xAX/linux-insides).**
+질문이나 제안 사항이 있으면 [twitter](https://twitter.com/0xAX)에 의견이나 핑을 남겨주세요.
+
+**영어는 제 모국어가 아닙니다. 그리고 여타 불편하셨던 점에 대해서 정말로 사과드립니다. 만약 실수를 찾아내셨다면 부디 [linux-insides 원본](https://github.com/0xAX/linux-internals)으로, 번역에 대해서는 [linux-insides 한글 번역](https://github.com/junsooo/linux-insides-ko)으로 PR을 보내주세요.**
 
 Links
 --------------------------------------------------------------------------------

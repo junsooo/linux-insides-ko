@@ -1,52 +1,52 @@
-Limits on resources in Linux
+Linux의 리소스 제한
 ================================================================================
 
-Each process in the system uses certain amount of different resources like files, CPU time, memory and so on.
+시스템의 각 프로세스는 파일, CPU 시간, 메모리 등과 같은 특정 양의 서로 다른 리소스를 사용합니다.
 
-Such resources are not infinite and each process and we should have an instrument to manage it. Sometimes it is useful to know current limits for a certain resource or to change it's value. In this post we will consider such instruments that allow us to get information about limits for a process and increase or decrease such limits.
+이러한 자원은 무한하지 않으며 각 프로세스마다 이를 관리 할 도구가 있어야 합니다. 때로는 특정 자원에 대한 현재 제한을 알고 있거나 값을 변경하는 것이 유용합니다. 이 게시물에서는 프로세스 한계에 대한 정보를 얻고 그러한 한계를 늘리거나 줄일 수있는 도구를 고려할 것입니다.
 
-We will start from userspace view and then we will look how it is implemented in the Linux kernel.
+사용자 공간보기에서 시작하여 Linux 커널에서 어떻게 구현되는지 살펴 보겠습니다.
 
-There are three main fundamental [system calls](https://en.wikipedia.org/wiki/System_call) to manage resource limit for a process:
+프로세스에 대한 리소스 제한을 관리하기위한 세 가지 기본 [시스템 호출](https://en.wikipedia.org/wiki/System_call)이 있습니다:
 
   * `getrlimit`
   * `setrlimit`
   * `prlimit`
 
-The first two allows a process to read and set limits on a system resource. The last one is extension for previous functions. The `prlimit` allows to set and read the resource limits of a process specified by [PID](https://en.wikipedia.org/wiki/Process_identifier). Definitions of these functions looks:
+처음 두 개는 프로세스가 시스템 리소스에 대한 제한을 읽고 설정할 수 있도록합니다. 마지막은 이전 기능의 확장입니다. `prlimit`는 [PID](https://en.wikipedia.org/wiki/Process_identifier)에 의해 지정된 프로세스의 리소스 제한을 설정하고 읽을 수 있게 합니다. 이 함수의 정의는:
 
-The `getrlimit` is:
+`getrlimit`는:
 
 ```C
 int getrlimit(int resource, struct rlimit *rlim);
 ```
 
-The `setrlimit` is:
+`setrlimit`는:
 
 ```C
 int setrlimit(int resource, const struct rlimit *rlim);
 ```
 
-And the definition of the `prlimit` is:
+그리고 `prlimit` 정의는:
 
 ```C
 int prlimit(pid_t pid, int resource, const struct rlimit *new_limit,
             struct rlimit *old_limit);
 ```
 
-In the first two cases, functions takes two parameters:
+처음 두 경우에 함수는 두 가지 매개 변수를 사용합니다:
 
-  * `resource` - represents resource type (we will see available types later);
-  * `rlim` - combination of `soft` and `hard` limits.
+  * `resource` - 자원 유형을 나타냅니다(나중에 사용 가능한 유형이 표시됨);
+  * `rlim` - `soft` 와 `hard` 한계의 조합.
 
-There are two types of limits:
+한계에는 두 가지 유형이 있습니다:
 
   * `soft`
   * `hard`
 
-The first provides actual limit for a resource of a process. The second is a ceiling value of a `soft` limit and can be set only by superuser. So, `soft` limit can never exceed related `hard` limit.
+첫 번째는 프로세스 자원에 대한 실제 제한을 제공합니다. 두 번째는 `soft`한계의 상한값이며 수퍼 유저만 설정할 수 있습니다. 따라서 `soft`제한은 관련된 `hard`제한을 초과 할 수 없습니다.
 
-Both these values are combined in the `rlimit` structure:
+이 두 값은 `rlimit` 구조체로 결합됩니다:
 
 ```C
 struct rlimit {
@@ -55,15 +55,15 @@ struct rlimit {
 };
 ```
 
-The last one function looks a little bit complex and takes `4` arguments. Besides `resource` argument, it takes:
+마지막 함수는 약간 복잡해 보이며 `4`개의 매개변수를 가집니다. 매개변수 `리소스` 제외하면 다음과 같습니다:
 
-  * `pid` - specifies an ID of a process on which the `prlimit` should be executed;
-  * `new_limit` - provides new limits values if it is not `NULL`;
-  * `old_limit` - current `soft` and `hard` limits will be placed here if it is not `NULL`.
+  * `pid` - `prlimit`를 실행해야하는 프로세스의 ID 를 지정합니다.;
+  * `new_limit` - `NULL`이 아닌 경우 새로운 한계 값을 제공;
+  * `old_limit` - `NULL`이 아닌 경우 현재 `soft` 및 `hard` 한계가 여기에 배치됩니다.
 
-Exactly `prlimit` function is used by [ulimit](https://www.gnu.org/software/bash/manual/html_node/Bash-Builtins.html#index-ulimit) util. We can verify this with the help of [strace](https://linux.die.net/man/1/strace) util.
+`prlimit` 기능은 [ulimit](https://www.gnu.org/software/bash/manual/html_node/Bash-Builtins.html#index-ulimit) util에서 사용합니다. [strace](https://linux.die.net/man/1/strace) util의 도움으로 이를 확인할 수 있습니다.
 
-For example:
+예를 들어:
 
 ```
 ~$ strace ulimit -s 2>&1 | grep rl
@@ -73,39 +73,39 @@ prlimit64(0, RLIMIT_NOFILE, NULL, {rlim_cur=1024, rlim_max=4*1024}) = 0
 prlimit64(0, RLIMIT_STACK, NULL, {rlim_cur=8192*1024, rlim_max=RLIM64_INFINITY}) = 0
 ```
 
-Here we can see `prlimit64`, but not the `prlimit`. The fact is that we see underlying system call here instead of library call.
+여기에서 `prlimit64`는 볼 수 있지만 `prlimit`는 볼 수 없습니다. 사실 우리는 라이브러리 호출 대신 기본 시스템 호출을 볼 수 있습니다.
 
-Now let's look at list of available resources:
+이제 사용 가능한 리소스 목록을 살펴 보겠습니다:
 
 | Resource          | Description
 |-------------------|------------------------------------------------------------------------------------------|
-| RLIMIT_CPU        | CPU time limit given in seconds                                                          |
-| RLIMIT_FSIZE      | the maximum size of files that a process may create                                      |
-| RLIMIT_DATA       | the maximum  size  of  the process's data segment                                        |
-| RLIMIT_STACK      | the maximum size of the process stack in bytes                                           |
-| RLIMIT_CORE       | the maximum size of a [core](http://man7.org/linux/man-pages/man5/core.5.html) file.     |
-| RLIMIT_RSS        | the number of bytes that can be allocated for a process in RAM                           |
-| RLIMIT_NPROC      | the maximum number of processes that can be created by a user                            |
-| RLIMIT_NOFILE     | the maximum number of a file descriptor that can be opened by a process                  |
-| RLIMIT_MEMLOCK    | the maximum number of bytes of memory that may be locked into RAM by [mlock](http://man7.org/linux/man-pages/man2/mlock.2.html).|
-| RLIMIT_AS         | the maximum size of virtual memory in bytes.                                             |
-| RLIMIT_LOCKS      | the maximum number [flock](https://linux.die.net/man/1/flock) and locking related [fcntl](http://man7.org/linux/man-pages/man2/fcntl.2.html) calls|
-| RLIMIT_SIGPENDING | maximum number of [signals](http://man7.org/linux/man-pages/man7/signal.7.html) that may be queued for a user of the calling process|
-| RLIMIT_MSGQUEUE   | the number of bytes that can be allocated for [POSIX message queues](http://man7.org/linux/man-pages/man7/mq_overview.7.html) |
-| RLIMIT_NICE       | the maximum [nice](https://linux.die.net/man/1/nice) value that can be set by a process  |
-| RLIMIT_RTPRIO     | maximum real-time priority value                                                         |
-| RLIMIT_RTTIME     | maximum number of microseconds that a process may be scheduled under real-time scheduling policy without making blocking system call|
+| RLIMIT_CPU        | 초 단위의 CPU 시간 제한                                                          |
+| RLIMIT_FSIZE      | 프로세스가 생성 할 수있는 최대 파일 크기                                      |
+| RLIMIT_DATA       | 프로세스 데이터 세그먼트의 최대 크기                                        |
+| RLIMIT_STACK      | 바이트 단위의 프로세스 스택의 최대 크기                                           |
+| RLIMIT_CORE       | [core](http://man7.org/linux/man-pages/man5/core.5.html) 파일의 최대 크기.     |
+| RLIMIT_RSS        | RAM에서 프로세스에 할당 할 수있는 바이트 수                           |
+| RLIMIT_NPROC      | 사용자가 만들 수있는 최대 프로세스 수                            |
+| RLIMIT_NOFILE     | 프로세스가 열 수있는 파일 디스크립터의 최대 수                  |
+| RLIMIT_MEMLOCK    | [mlock](http://man7.org/linux/man-pages/man2/mlock.2.html)에 의해 RAM에 잠길 수있는 최대 메모리 바이트 수.|
+| RLIMIT_AS         | 가상 메모리의 최대 크기 (바이트)                                             |
+| RLIMIT_LOCKS      | 최대 수 [flock](https://linux.die.net/man/1/flock) 및 잠금 관련 [fcntl](http://man7.org/linux/man-pages/man2/fcntl.2.html) 호출|
+| RLIMIT_SIGPENDING | 호출 프로세스의 사용자를 위해 대기 할 수있는 최대 [신호](http://man7.org/linux/man-pages/man7/signal.7.html) 수|
+| RLIMIT_MSGQUEUE   | [POSIX 메시지 대기열](http://man7.org/linux/man-pages/man7/mq_overview.7.html)에 할당 할 수있는 바이트 수  |
+| RLIMIT_NICE       | 프로세스에 의해 설정 될 수있는 최대 [nice](https://linux.die.net/man/1/nice) 값  |
+| RLIMIT_RTPRIO     | 최대 실시간 우선 순위 값                                                         |
+| RLIMIT_RTTIME     | 시스템 호출을 차단하지 않고 실시간 예약 정책에 따라 프로세스를 예약 할 수있는 최대 마이크로 초 수|
 
-If you're looking into source code of open source projects, you will note that reading or updating of a resource limit is quite widely used operation.
+오픈 소스 프로젝트의 소스 코드를 살펴보면 리소스 제한을 읽거나 업데이트하는 작업이 널리 사용됩니다.
 
-For example: [systemd](https://github.com/systemd/systemd/blob/01a45898fce8def67d51332bccc410eb1e8710e7/src/core/main.c)
+예를 들어: [systemd](https://github.com/systemd/systemd/blob/01a45898fce8def67d51332bccc410eb1e8710e7/src/core/main.c)
 
 ```C
 /* Don't limit the coredump size */
 (void) setrlimit(RLIMIT_CORE, &RLIMIT_MAKE_CONST(RLIM_INFINITY));
 ```
 
-Or [haproxy](https://github.com/haproxy/haproxy/blob/25f067ccec52f53b0248a05caceb7841a3cb99df/src/haproxy.c):
+또는 [haproxy](https://github.com/haproxy/haproxy/blob/25f067ccec52f53b0248a05caceb7841a3cb99df/src/haproxy.c):
 
 ```C
 getrlimit(RLIMIT_NOFILE, &limit);
@@ -115,14 +115,14 @@ if (limit.rlim_cur < global.maxsock) {
 }
 ```
 
-We've just saw a little bit about resources limits related stuff in the userspace, now let's look at the same system calls in the Linux kernel.
+우리는 사용자 공간에서 리소스 제한 관련 사항에 대해 조금 보았습니다. 이제 Linux 커널에서 동일한 시스템 호출을 살펴 보겠습니다.
 
-Limits on resource in the Linux kernel
+Linux 커널의 리소스 제한
 --------------------------------------------------------------------------------
 
-Both implementation of `getrlimit` system call and `setrlimit` looks similar. Both they execute `do_prlimit` function that is core implementation of the `prlimit` system call and copy from/to given `rlimit` from/to userspace:
+`getrlimit` 시스템 호출과 `setrlimit`의 구현은 비슷합니다. 둘 다 `prlimit` 시스템 호출의 핵심 구현 인 `do_prlimit` 함수를 실행하고 주어진 `rlimit`에서 사용자 공간으로 복사합니다:
 
-The `getrlimit`:
+`getrlimit`:
 
 ```C
 SYSCALL_DEFINE2(getrlimit, unsigned int, resource, struct rlimit __user *, rlim)
@@ -138,7 +138,7 @@ SYSCALL_DEFINE2(getrlimit, unsigned int, resource, struct rlimit __user *, rlim)
 }
 ```
 
-and `setrlimit`:
+`setrlimit`:
 
 ```C
 SYSCALL_DEFINE2(setrlimit, unsigned int, resource, struct rlimit __user *, rlim)
@@ -151,16 +151,16 @@ SYSCALL_DEFINE2(setrlimit, unsigned int, resource, struct rlimit __user *, rlim)
 }
 ```
 
-Implementations of these system calls are defined in the [kernel/sys.c](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/kernel/sys.c) kernel source code file.
+이러한 시스템 호출의 구현은 [kernel/sys.c](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/kernel/sys.c) 커널 소스 코드 파일에 정의되어 있습니다.
 
-First of all the `do_prlimit` function executes a check that the given resource is valid:
+우선 `do_prlimit` 함수는 주어진 리소스가 유효한지 확인합니다:
 
 ```C
 if (resource >= RLIM_NLIMITS)
 	return -EINVAL;
 ```
 
-and in a failure case returns `-EINVAL` error. After this check will pass successfully and new limits was passed as non `NULL` value, two following checks:
+실패하면 `-EINVAL` 오류를 반환합니다. 이 검사가 성공적으로 통과하고 새 한계가 `NULL`이 아닌 값으로 전달 된 후 다음 두 가지 검사 합니다:
 
 ```C
 if (new_rlim) {
@@ -172,14 +172,14 @@ if (new_rlim) {
 }
 ```
 
-check that the given `soft` limit does not exceed `hard` limit and in a case when the given resource is the maximum number of a file descriptors that hard limit is not greater than `sysctl_nr_open` value. The value of the `sysctl_nr_open` can be found via [procfs](https://en.wikipedia.org/wiki/Procfs):
+주어진 `소프트`한계가 `하드`한계를 초과하지 않는지와 주어진 자원이 하드 디스크 한계가 `sysctl_nr_open`값보다 크지 않은 파일 디스크립터의 최대 수인 경우 점검하십시오. `sysctl_nr_open`의 값은 [procfs](https://en.wikipedia.org/wiki/Procfs)를 통해 찾을 수 있습니다:
 
 ```
-~$ cat /proc/sys/fs/nr_open 
+~$ cat /proc/sys/fs/nr_open
 1048576
 ```
 
-After all of these checks we lock `tasklist` to be sure that [signal]() handlers related things will not be destroyed while we updating limits for a given resource:
+이 모든 검사 후에 우리는 주어진 리소스에 대한 한계를 업데이트하는 동안 [signal]() 핸들러와 관련된 것들이 파괴되지 않도록 `tasklist`를 잠급니다:
 
 ```C
 read_lock(&tasklist_lock);
@@ -189,29 +189,29 @@ read_lock(&tasklist_lock);
 read_unlock(&tasklist_lock);
 ```
 
-We need to do this because `prlimit` system call allows us to update limits of another task by the given pid. As task list is locked, we take the `rlimit` instance that is responsible for the given resource limit of the given process:
+`prlimit`시스템 호출을 통해 주어진 pid에 의해 다른 작업의 한계를 업데이트 할 수 있기 때문에 이를 수행해야 합니다. 작업 목록이 잠기면 주어진 프로세스의 주어진 리소스 제한을 담당하는 `rlimit` 인스턴스를 가져옵니다:
 
 ```C
 rlim = tsk->signal->rlim + resource;
 ```
 
-where the `tsk->signal->rlim` is just array of `struct rlimit` that represents certain resources. And if the `new_rlim` is not `NULL` we just update its value. If `old_rlim` is not `NULL` we fill it:
+여기서 `tsk-> signal-> rlim`은 특정 자원을 나타내는 `struct rlimit`의 배열입니다. 그리고 만약 `new_rlim`이 `NULL`이 아니면 우리는 그 값을 업데이트합니다. `old_rlim`이 `NULL`이 아닌 경우 채웁니다:
 
 ```C
 if (old_rlim)
     *old_rlim = *rlim;
 ```
 
-That's all.
+그게 답니다.
 
-Conclusion
+결론
 --------------------------------------------------------------------------------
 
-This is the end of the second part that describes implementation of the system calls in the Linux kernel. If you have questions or suggestions, ping me on Twitter [0xAX](https://twitter.com/0xAX), drop me an [email](anotherworldofworld@gmail.com), or just create an [issue](https://github.com/0xAX/linux-internals/issues/new).
+Linux 커널에서 시스템 호출의 구현을 설명하는 두 번째 부분의 끝입니다. 질문이나 제안 사항이 있으면 Twitter [0xAX](https://twitter.com/0xAX)에서 핑(Ping)하거나 [이메일](anotherworldofworld@gmail.com)을 보내거나 [이슈](https://github.com/0xAX/linux-internals/issues/new)를 만드세요.
 
-**Please note that English is not my first language and I am really sorry for any inconvenience. If you find any mistakes please send me PR to [linux-insides](https://github.com/0xAX/linux-internals).**
+**영어는 모국어가 아니면 죄송합니다. 실수를 발견하면 PR을 [linux-insides](https://github.com/0xAX/linux-internals)로 보내주십시오.**
 
-Links
+링크들
 --------------------------------------------------------------------------------
 
 * [system calls](https://en.wikipedia.org/wiki/System_call)

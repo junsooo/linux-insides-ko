@@ -1,28 +1,28 @@
-Kernel initialization. Part 6.
+커널 초기화. Part 6.
 ================================================================================
 
-Architecture-specific initialization, again...
+아키텍쳐 별 초기화
 ================================================================================
 
-In the previous [part](https://0xax.gitbooks.io/linux-insides/content/Initialization/linux-initialization-5.html) we saw architecture-specific (`x86_64` in our case) initialization stuff from the [arch/x86/kernel/setup.c](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/arch/x86/kernel/setup.c) and finished on `x86_configure_nx` function which sets the `_PAGE_NX` flag depends on support of [NX bit](http://en.wikipedia.org/wiki/NX_bit). As I wrote before `setup_arch` function and `start_kernel` are very big, so in this and in the next part we will continue to learn about architecture-specific initialization process. The next function after `x86_configure_nx` is `parse_early_param`. This function is defined in the [init/main.c](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/init/main.c) and as you can understand from its name, this function parses kernel command line and setups different services depends on the given parameters (all kernel command line parameters you can find are in the [Documentation/kernel-parameters.txt](https://github.com/torvalds/linux/blob/master/Documentation/admin-guide/kernel-parameters.rst)). You may remember how we setup `earlyprintk` in the earliest [part](https://0xax.gitbooks.io/linux-insides/content/Booting/linux-bootstrap-2.html). On the early stage we looked for kernel parameters and their value with the `cmdline_find_option` function and `__cmdline_find_option`, `__cmdline_find_option_bool` helpers from the [arch/x86/boot/cmdline.c](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/arch/x86/boot/cmdline.c). There we're in the generic kernel part which does not depend on architecture and here we use another approach. If you are reading linux kernel source code, you already note calls like this:
+이전의 [파트](https://0xax.gitbooks.io/linux-insides/content/Initialization/linux-initialization-5.html)에서 우리는 [arch/x86/kernel/setup.c](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/arch/x86/kernel/setup.c)에서 아키텍쳐 별(우리의 경우 `x86_64`) 초기화를 보았고 [NX bit](http://en.wikipedia.org/wiki/NX_bit)의 지원에 의존하는 `_PAGE_NX`플래그로 설정된 `x86_configure_nx`함수를 끝냈습니다. 이전에 작성한 `setup_arch`함수와 `start_kernel`이 매우 크므로 이번과 다음 파트에서 우리는 아키텍쳐 별 초기화 프로세스를 계속할 것입니다. `x86_configure_nx`의 다음 함수는 `parse_early_param`입니다. 이 함수는 [init/main.c](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/init/main.c)에서 정의됐으며 이름에서 알 수 있듯이, 이 함수는 커널 커맨드 라인을 분석하고 주어진 매개변수에 따라 다른 서비스를 설정합니다.(모든 커널 커맨드 라인 매개변수는 [Documentation/kernel-parameters.txt](https://github.com/torvalds/linux/blob/master/Documentation/admin-guide/kernel-parameters.rst)에서 찾을 수 있습니다). 당신은 아마 초기 [파트](https://0xax.gitbooks.io/linux-insides/content/Booting/linux-bootstrap-2.html)에서 우리가 어떻게 `earlyprintk`을 설정했는지 기억할 것입니다. 초반부에 우리는 커널 매개변수를 봤습니다. 그것들의 값은 [arch/x86/boot/cmdline.c](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/arch/x86/boot/cmdline.c)의 `cmdline_find_option`함수와 `__cmdline_find_option`,`__cmdline_find_option_bool`헬퍼입니다. 우리는 아키텍쳐에 의존하지 않는 일반적인 커널 파트를 보며 다른 접근법을 사용합니다. 리눅스 소스 코드를 읽는 중이라면 다음과 같은 호출에 주목하십시오:
 
 ```C
 early_param("gbpages", parse_direct_gbpages_on);
 ```
 
-`early_param` macro takes two parameters:
+`early_param`매크로는 두 매개변수를 가집니다:
 
-* command line parameter name;
-* function which will be called if given parameter is passed.
+* 커맨드 라인 매개변수의 이름;
+* 주어진 매개변수가 전달되면 호출되는 함수
 
-and defined as:
+다음과 같이 정의됩니다:
 
 ```C
 #define early_param(str, fn) \
         __setup_param(str, fn, fn, 1)
 ```
 
-in the [include/linux/init.h](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/include/linux/init.h). As you can see `early_param` macro just makes call of the `__setup_param` macro:
+[include/linux/init.h](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/include/linux/init.h)에 포함됩니다. `early_param`매크로가 `__setup_param`매크로를 호출하는 것을 볼 수 있습니다:
 
 ```C
 #define __setup_param(str, unique_id, fn, early)                \
@@ -34,7 +34,7 @@ in the [include/linux/init.h](https://github.com/torvalds/linux/blob/16f73eb02d7
                 = { __setup_str_##unique_id, fn, early }
 ```
 
-This macro defines `__setup_str_*_id` variable (where `*` depends on given function name) and assigns it to the given command line parameter name. In the next line we can see definition of the `__setup_*` variable which type is `obs_kernel_param` and its initialization. `obs_kernel_param` structure defined as:
+이 매크로는 `__setup_str_*_id`변수(*주어진 함수 이름에 따라 다름)를 정의하고 주어진 커맨드 라인 매개변수의 이름을 정의합니다. 다음 줄에서 우리는 `obs_kernel_param`타입의 `__setup_*`변수의 정의와 초기화를 볼 수 있습니다. `obs_kernel_param`구조체의 정의:
 
 ```C
 struct obs_kernel_param {
@@ -45,12 +45,13 @@ struct obs_kernel_param {
 ```
 
 and contains three fields:
+그리고 3개의 필드를 포함합니다:
 
-* name of the kernel parameter;
-* function which setups something depend on parameter;
-* field determines is parameter early (1) or not (0).
+* 커널 매개변수의 이름;
+* 매개변수에 따라 다른 무언가를 설정하는 함수;
+* 필드가 초기 값(1)인지 아닌지(0)를 결정.
 
-Note that `__set_param` macro defines with `__section(.init.setup)` attribute. It means that all `__setup_str_*` will be placed in the `.init.setup` section, moreover, as we can see in the [include/asm-generic/vmlinux.lds.h](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/include/asm-generic/vmlinux.lds.h), they will be placed between `__setup_start` and `__setup_end`:
+참고 `__set_param`매크로를 정의하는 `__section(.init.setup)`속성. 이것은 모든 `__setup_str_*`이 `.init.setup`섹션에 위치될 수 있음을 의미합니다. 더욱이 [include/asm-generic/vmlinux.lds.h](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/include/asm-generic/vmlinux.lds.h)에서 볼 수 있는 것처럼 그것들은 `__setup_start`과 `__setup_end`사이에 배치될 것입니다:
 
 ```
 #define INIT_SETUP(initsetup_align)                \
@@ -60,7 +61,7 @@ Note that `__set_param` macro defines with `__section(.init.setup)` attribute. I
                 VMLINUX_SYMBOL(__setup_end) = .;
 ```
 
-Now we know how parameters are defined, let's back to the `parse_early_param` implementation: 
+이제 우리는 매개변수가 어떻게 정의되는지 알았습니다. `parse_early_param`의 구현으로 돌아갑시다:
 
 ```C
 void __init parse_early_param(void)
@@ -78,7 +79,7 @@ void __init parse_early_param(void)
 }
 ```
 
-The `parse_early_param` function defines two static variables. First `done` check that `parse_early_param` already called and the second is temporary storage for kernel command line. After this we copy `boot_command_line` to the temporary command line which we just defined and call the `parse_early_options` function from the same source code `main.c` file. `parse_early_options` calls the `parse_args` function from the [kernel/params.c](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/) where `parse_args` parses given command line and calls `do_early_param` function. This [function](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/init/main.c#L413) goes from the ` __setup_start` to `__setup_end`, and calls the function from the `obs_kernel_param` if a parameter is early. After this all services which are depend on early command line parameters were setup and the next call after the `parse_early_param` is `x86_report_nx`. As I wrote in the beginning of this part, we already set `NX-bit` with the `x86_configure_nx`. The next `x86_report_nx` function from the [arch/x86/mm/setup_nx.c](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/arch/x86/mm/setup_nx.c) just prints information about the `NX`. Note that we call `x86_report_nx` not right after the `x86_configure_nx`, but after the call of the `parse_early_param`. The answer is simple: we call it after the `parse_early_param` because the kernel support `noexec` parameter:
+이 `parse_early_param`함수는 두개의 정적 변수를 정의합니다. 먼저 `done`은 `parse_early_param`가 이미 호출됬는지 확인하고 두번째는 커널 커맨드 라인을 위한 임시 저장소 입니다. 그 다음 우리는 방금 정의한 임시 커맨드 라인에 `boot_command_line`를 복사하고 동일한 소스 코드 `main.c`파일에서 `parse_early_options`함수를 호출합니다. `parse_early_options`는 [kernel/params.c](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/)에서 `parse_args`함수를 호출합니다. `parse_args`는 주어진 커맨드 라인을 분석하고 `do_early_param`함수를 호출합니다. 이 [함수](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/init/main.c#L413) ` __setup_start`에서 `__setup_end`으로 이동하고, 매개변수가 early인 경우 `obs_kernel_param`함수를 호출합니다. 그 다음 early 커맨드 라인 매개변수에 의존하는 모든 서비스가 설정된 다음 `parse_early_param`는 `x86_report_nx`을 호출합니다. 이 파트의 도입부에서 썻듯이 우리는 이미 `NX-bit`를 `x86_configure_nx`로 설정했습니다. 다음으로 [arch/x86/mm/setup_nx.c](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/arch/x86/mm/setup_nx.c)의 `x86_report_nx`함수는 `NX`의 정보를 출력합니다. 참고로 `x86_report_nx`는 `x86_configure_nx`의 바로 다음이 아니라 `parse_early_param`를 호출한 다음 호출합니다. 대답은 간단합니다: 커널이 `noexec` 매개변수를 지원하므로 우리는 그것을 `parse_early_param`다음에 호출합니다:
 
 ```
 noexec		[X86]
@@ -87,19 +88,19 @@ noexec		[X86]
 			noexec=off: disable non-executable mappings
 ```
 
-We can see it in the booting time:
+우리는 그것의 booting 시간을 볼 수 있습니다:
 
 ![NX](http://oi62.tinypic.com/swwxhy.jpg)
 
-After this we can see call of the:
+다음으로 함수의 호출을 볼 수 있습니다:
 
 ```C
 	memblock_x86_reserve_range_setup_data();
 ```
 
-function. This function is defined in the same [arch/x86/kernel/setup.c](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/arch/x86/kernel/setup.c) source code file and remaps memory for the `setup_data` and reserved memory block for the `setup_data` (more about `setup_data` you can read in the previous [part](https://0xax.gitbooks.io/linux-insides/content/Initialization/linux-initialization-5.html) and about `ioremap` and `memblock` you can read in the [Linux kernel memory management](https://0xax.gitbooks.io/linux-insides/content/MM/index.html)).
+이 함수는 같은 [arch/x86/kernel/setup.c](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/arch/x86/kernel/setup.c) 소스 코드 파일에서 정의됐습니다. `setup_data`메모리를 다시 매핑하고  `setup_data`(`setup_data`에 대한 정보는 이전의 [파트](https://0xax.gitbooks.io/linux-insides/content/Initialization/linux-initialization-5.html)에서 읽을 수 있고 `ioremap`와 `memblock`에 관해서는 [리눅스 커널 메모리 관리](https://0xax.gitbooks.io/linux-insides/content/MM/index.html)에서 읽을 수 있습니다)메모리 블록을 전달합니다.
 
-In the next step we can see following conditional statement:
+다음 단계에서는 다음과 같은 조건문을 볼 수 있습니다:
 
 ```C
 	if (acpi_mps_check()) {
@@ -110,7 +111,7 @@ In the next step we can see following conditional statement:
 	}
 ```
 
-The first `acpi_mps_check` function from the [arch/x86/kernel/acpi/boot.c](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/arch/x86/kernel/acpi/boot.c) depends on `CONFIG_X86_LOCAL_APIC` and `CONFIG_x86_MPPARSE` configuration options:
+먼저 [arch/x86/kernel/acpi/boot.c](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/arch/x86/kernel/acpi/boot.c)의 `acpi_mps_check`함수는 `CONFIG_X86_LOCAL_APIC`과 `CONFIG_x86_MPPARSE`작동 옵션에 의존합니다:
 
 ```C
 int __init acpi_mps_check(void)
@@ -128,12 +129,12 @@ int __init acpi_mps_check(void)
 }
 ```
 
-It checks the built-in `MPS` or [MultiProcessor Specification](http://en.wikipedia.org/wiki/MultiProcessor_Specification) table. If `CONFIG_X86_LOCAL_APIC` is set and `CONFIG_x86_MPPAARSE` is not set, `acpi_mps_check` prints warning message if the one of the command line options: `acpi=off`, `acpi=noirq` or `pci=noacpi` passed to the kernel. If `acpi_mps_check` returns `1` it means that we disable local [APIC](http://en.wikipedia.org/wiki/Advanced_Programmable_Interrupt_Controller) and clear `X86_FEATURE_APIC` bit in the of the current CPU with the `setup_clear_cpu_cap` macro. (more about CPU mask you can read in the [CPU masks](https://0xax.gitbooks.io/linux-insides/content/Concepts/linux-cpu-2.html)).
+내장 `MPS`또는 [다중프로세서 사양](http://en.wikipedia.org/wiki/MultiProcessor_Specification)테이블을 확인합니다. `CONFIG_X86_LOCAL_APIC`가 설정되고 `CONFIG_x86_MPPAARSE`이 설정되지 않은 경우, 다음 옵션들 중 하나가 커널에 전달되면 `acpi_mps_check`는 경고 메시지를 출력합니다: `acpi=off`, `acpi=noirq` 또는 `pci=noacpi`. `acpi_mps_check`가 `1`을 반환하면 그것은 로컬 [APIC](http://en.wikipedia.org/wiki/Advanced_Programmable_Interrupt_Controller)가 비활성화되고 `setup_clear_cpu_cap`매크로에서 현재 CPUdml `X86_FEATURE_APIC`비트가 지워진 것을 의미합니다.(CPU마스크에 대한 것은 [CPU마스크](https://0xax.gitbooks.io/linux-insides/content/Concepts/linux-cpu-2.html)에서 읽을 수 있습니다).
 
-Early PCI dump
+초기 PCI 덤프
 --------------------------------------------------------------------------------
 
-In the next step we make a dump of the [PCI](http://en.wikipedia.org/wiki/Conventional_PCI) devices with the following code:
+다음 단계에서는 다음 코드를 사용하여 [PCI](http://en.wikipedia.org/wiki/Conventional_PCI)장치의 덤프를 만듭니다:
 
 ```C
 #ifdef CONFIG_PCI
@@ -142,13 +143,13 @@ In the next step we make a dump of the [PCI](http://en.wikipedia.org/wiki/Conven
 #endif
 ```
 
-`pci_early_dump_regs` variable defined in the [arch/x86/pci/common.c](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/arch/x86/pci/common.c) and its value depends on the kernel command line parameter: `pci=earlydump`. We can find definition of this parameter in the [drivers/pci/pci.c](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/arch):
+`pci_early_dump_regs`변수는 [arch/x86/pci/common.c](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/arch/x86/pci/common.c)에 정의되었고 이 값은 커널 커맨드 라인 매개변수:`pci=earlydump`에 의존합니다. 우리는 [drivers/pci/pci.c](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/arch)안에서 이 매개변수의 정의를 찾을 수 있습니다:
 
 ```C
 early_param("pci", pci_setup);
 ```
 
-`pci_setup` function gets the string after the `pci=` and analyzes it. This function calls `pcibios_setup` which defined as `__weak` in the [drivers/pci/pci.c](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/arch) and every architecture defines the same function which overrides `__weak` analog. For example `x86_64` architecture-dependent version is in the [arch/x86/pci/common.c](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/arch/x86/pci/common.c):
+`pci_setup`함수는 `pci=`문자열을 가져온 다음 분석합니다. 이 함수는 [drivers/pci/pci.c](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/arch)안의 `__weak`에서 정의된 `pcibios_setup`을 호출하고 모든 아키텍쳐는 `__weak`분석을 중단하는 동일한 함수를 정의합니다. 예를 들어 `x86_64`아키텍쳐 종속 버전은 [arch/x86/pci/common.c](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/arch/x86/pci/common.c)에 있습니다:
 
 ```C
 char *__init pcibios_setup(char *str) {
@@ -165,14 +166,14 @@ char *__init pcibios_setup(char *str) {
 }
 ```
 
-So, if `CONFIG_PCI` option is set and we passed `pci=earlydump` option to the kernel command line, next function which will be called - `early_dump_pci_devices` from the [arch/x86/pci/early.c](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/arch/x86/pci/early.c). This function checks `noearly` pci parameter with:
+따라서 `CONFIG_PCI`옵션이 설정되고 `pci=earlydump`옵션이 커널 커맨드 라인에 전달되면, [arch/x86/pci/early.c](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/arch/x86/pci/early.c)의 `early_dump_pci_devices`함수가 호출됩니다. 이 함수는 다음과 같이 `noearly` pci 매개변수를 확인합니다:
 
 ```C
 if (!early_pci_allowed())
         return;
 ```
 
-and returns if it was passed. Each PCI domain can host up to `256` buses and each bus hosts up to 32 devices. So, we goes in a loop:
+그리고 그것이 전달되면 반환합니다. 각 PCI 도메인은 최대 `256`개의 버스를 호스트 할 수 있으며 각 버스는 최대 32개의 장치를 호스트 할 수 있습니다. 루프로 가봅시다:
 
 ```C
 for (bus = 0; bus < 256; bus++) {
@@ -186,14 +187,14 @@ for (bus = 0; bus < 256; bus++) {
 }
 ```
 
-and read the `pci` config with the `read_pci_config` function.
+`read_pci_config`함수로 `pci`설정을 읽읍시다.
 
-That's all. We will not go deep in the `pci` details, but will see more details in the special `Drivers/PCI` part.
+이것이 전부입니다. 우리는 `pci`의 세부사항은 깊게 들어가지 않지만 특수 `Drivers/PCI`파트에서 자세한 것을 볼 것입니다.
 
-Finish with memory parsing
+메모리 분석 완료
 --------------------------------------------------------------------------------
 
-After the `early_dump_pci_devices`, there are a couple of function related with available memory and [e820](http://en.wikipedia.org/wiki/E820) which we collected in the [First steps in the kernel setup](https://0xax.gitbooks.io/linux-insides/content/Booting/linux-bootstrap-2.html) part:
+다음은 [커널 설정의 첫 단계](https://0xax.gitbooks.io/linux-insides/content/Booting/linux-bootstrap-2.html)파트에서 얻은 `early_dump_pci_devices`의 사용 가능한 메모리 및 [e820](http://en.wikipedia.org/wiki/E820)과 관련된 몇 가지 함수입니다.
 
 ```C
 	/* update the e820_saved too */
@@ -208,14 +209,14 @@ After the `early_dump_pci_devices`, there are a couple of function related with 
 	early_reserve_e820_mpc_new();
 ```
 
-Let's look on it. As you can see the first function is `e820_reserve_setup_data`. This function does almost the same as `memblock_x86_reserve_range_setup_data` which we saw above, but it also calls `e820_update_range` which adds new regions to the `e820map` with the given type which is `E820_RESERVED_KERN` in our case. The next function is `finish_e820_parsing` which sanitizes `e820map` with the `sanitize_e820_map` function. Besides this two functions we can see a couple of functions related to the [e820](http://en.wikipedia.org/wiki/E820). You can see it in the listing above. `e820_add_kernel_range` function takes the physical address of the kernel start and end:
+이것을 봅시다. 보시다시피 첫 번째 함수는 `e820_reserve_setup_data`입니다. 이 함수는 우리가 위에서 본 `memblock_x86_reserve_range_setup_data`와 거의 같지만 우리의 경우 주어진 `E820_RESERVED_KERN` 타입의 `e820map`에 새 지역을 더하는 `e820_update_range`을 호출합니다. 다음 함수는 `sanitize_e820_map`함수의 `e820map`을 제거하는 `finish_e820_parsing`함수입니다. 이 두 함수외에도 우리는 [e820](http://en.wikipedia.org/wiki/E820)과 연관된 몇 가지 함수를 위의 목록에서 볼 수 있습니다.  `e820_add_kernel_range`함수는 커널의 시작과 끝의 물리적 주소를 취합니다:
 
 ```C
 u64 start = __pa_symbol(_text);
 u64 size = __pa_symbol(_end) - start;
 ```
 
-checks that `.text` `.data` and `.bss` marked as `E820RAM` in the `e820map` and prints the warning message if not. The next function `trm_bios_range` update first 4096 bytes in `e820Map` as `E820_RESERVED` and sanitizes it again with the call of the `sanitize_e820_map`. After this we get the last page frame number with the call of the `e820_end_of_ram_pfn` function. Every memory page has a unique number - `Page frame number`  and `e820_end_of_ram_pfn` function returns the maximum with the call of the `e820_end_pfn`:
+`.text` `.data`와 `.bss`가 `e820map`의 `E820RAM`로 표시되는지 확인하고 아니라면 경고 메시지를 출력합니다. 다음으로 `trm_bios_range`함수는 `e820Map`의 4096바이트를 `E820_RESERVED`으로 업데이트하고 `sanitize_e820_map`를 호출해서 그것을 다시 제거합니다. 다음으로 `e820_end_of_ram_pfn`함수를 호출해서 마지막 페이지의 프레임 넘버를 얻습니다. 모든 메모리 페이지는 고유의 넘버 `Page frame number`를 가집니다. `e820_end_of_ram_pfn`함수는 `e820_end_pfn` 호출의 최대값을 반환합니다:
 
 ```C
 unsigned long __init e820_end_of_ram_pfn(void)
@@ -224,7 +225,7 @@ unsigned long __init e820_end_of_ram_pfn(void)
 }
 ```
 
-where `e820_end_pfn` takes maximum page frame number on the certain architecture (`MAX_ARCH_PFN` is `0x400000000` for `x86_64`). In the `e820_end_pfn` we go through the all `e820` slots and check that `e820` entry has `E820_RAM` or `E820_PRAM` type because we calculate page frame numbers only for these types, gets the base address and end address of the page frame number for the current `e820` entry and makes some checks for these addresses:
+`e820_end_pfn`에서 특정 아키텍쳐(`MAX_ARCH_PFN`은 `x86_64`를 위해 `0x400000000`)의 최대 페이지 프레임 수를 가져옵니다. `e820_end_pfn`에서 우리는 모든 `e820`슬롯을 통과하고 `e820`이 `E820_RAM` 또는 `E820_PRAM`타입에 진입했는지 확인합니다. 왜냐하면 우리는 이 타입들만을 위해 페이지 프레임 넘버를 계산했기 때문입니다. 기본 주소와 현재 `e820` 진입을 위한 페이지 프레임 넘버의 마지막 주소를 얻고 이 주소에 대해 몇 가지 확인을 합니다:
 
 ```C
 for (i = 0; i < e820.nr_map; i++) {
@@ -258,7 +259,7 @@ for (i = 0; i < e820.nr_map; i++) {
 	return last_pfn;
 ```
 
-After this we check that `last_pfn` which we got in the loop is not greater that maximum page frame number for the certain architecture (`x86_64` in our case), print information about last page frame number and return it. We can see the `last_pfn` in the `dmesg` output:
+다음으로 우리는 `last_pfn`에서 루프에 있는 것이 특정 아키텍쳐(우리의 경우 `x86_64`)의 최대 페이지 프레임 수보다 크지 않은지 확인하고 마지막 페이지 프레임 넘버의 정보를 출력하고 그것을 반환합니다. 우리는 `dmesg`출력에서 `last_pfn`을 볼 수 있습니다:
 
 ```
 ...
@@ -266,7 +267,7 @@ After this we check that `last_pfn` which we got in the loop is not greater that
 ...
 ```
 
-After this, as we have calculated the biggest page frame number, we calculate `max_low_pfn` which is the biggest page frame number in the `low memory` or below first `4` gigabytes. If installed more than 4 gigabytes of RAM, `max_low_pfn` will be result of the `e820_end_of_low_ram_pfn` function which does the same `e820_end_of_ram_pfn` but with 4 gigabytes limit, in other way `max_low_pfn` will be the same as `max_pfn`:
+그 후, 가장 큰 페이지 프레임 넘버를 계산할 때, `max_low_pfn`가 `low memory` 또는 첫 `4`기가바이트 이하의 가장 큰 페이지 프레임 넘버인지를 계산합니다. 4기가바이트 이상의 RAM을 설치한 경우 `max_low_pfn`은 `e820_end_of_ram_pfn`과 동일한 `e820_end_of_low_ram_pfn`함수의 결과가 될 것이지만 4기가바이트의 제한이 있습니다. 다른 방식으로는 `max_low_pfn`이 다음처럼 `max_pfn`과 같아질 것입니다:
 
 ```C
 if (max_pfn > (1UL<<(32 - PAGE_SHIFT)))
@@ -277,19 +278,19 @@ else
 high_memory = (void *)__va(max_pfn * PAGE_SIZE - 1) + 1;
 ```
 
-Next we calculate `high_memory` (defines the upper bound on direct map memory) with `__va` macro which returns a virtual address by the given physical memory.
+다음으로 우리는 주어진 물리적 메모리에 의해 가상 주소를 반환하는 `__va`매크로의 `high_memory`(직접 맵 메모리에서 상한을 정의)를 계산합니다.
 
-DMI scanning 
+DMI 스캐닝 
 -------------------------------------------------------------------------------
 
-The next step after manipulations with different memory regions and `e820` slots is collecting information about computer. We will get all information with the [Desktop Management Interface](http://en.wikipedia.org/wiki/Desktop_Management_Interface) and following functions:
+다음 단계는 다른 메모리 지역과 `e820` 슬롯을 조작한 후 컴퓨터에 대한 정보를 모으는 것입니다. [데스크탑 관리 인터페이스](http://en.wikipedia.org/wiki/Desktop_Management_Interface) 및 다음 함수를 통해 모든 정보를 얻을 수 있습니다:
 
 ```C
 dmi_scan_machine();
 dmi_memdev_walk();
 ```
 
-First is `dmi_scan_machine` defined in the [drivers/firmware/dmi_scan.c](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/drivers/firmware/dmi_scan.c). This function goes through the [System Management BIOS](http://en.wikipedia.org/wiki/System_Management_BIOS) structures and extracts information. There are two ways specified to gain access to the `SMBIOS` table: get the pointer to the `SMBIOS` table from the [EFI](http://en.wikipedia.org/wiki/Unified_Extensible_Firmware_Interface)'s configuration table and scanning the physical memory between `0xF0000` and `0x10000` addresses. Let's look on the second approach. `dmi_scan_machine` function remaps memory between `0xf0000` and `0x10000` with the `dmi_early_remap` which just expands to the `early_ioremap`:
+먼저 `dmi_scan_machine`은 [drivers/firmware/dmi_scan.c](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/drivers/firmware/dmi_scan.c)에 정의되어 있습니다. 이 함수는 [시스템 관리 BIOS](http://en.wikipedia.org/wiki/System_Management_BIOS)구조체를 통해서 정보를 추출합니다. `SMBIOS`테이블에 접근하기 위해 지정된 두 가지 방법이 있습니다: [EFI](http://en.wikipedia.org/wiki/Unified_Extensible_Firmware_Interface)구성 테이블에서 `SMBIOS`테이블의 포인터를 얻고 `0xF0000`와 `0x10000`주소 사이의 물리적 메모리를 스캔합니다. 두 번째 방법을 보겠습니다. `dmi_scan_machine`함수는 `early_ioremap`를 확장하는 `dmi_early_remap`에서 `0xf0000`와 `0x10000` 사이의 메모미를 다시 매핑합니다:
 
 ```C
 void __init dmi_scan_machine(void)
@@ -304,7 +305,7 @@ void __init dmi_scan_machine(void)
 			goto error;
 ```
 
-and iterates over all `DMI` header address and find search `_SM_` string:
+모든 `DMI`헤더 주소를 반복하고 `_SM_`문자열을 검색해서 찾습니다:
 
 ```C
 memset(buf, 0, 16);
@@ -319,20 +320,20 @@ for (q = p; q < p + 0x10000; q += 16) {
 }
 ```
 
-`_SM_` string must be between `000F0000h` and `0x000FFFFF`. Here we copy 16 bytes to the `buf` with `memcpy_fromio` which is the same `memcpy` and execute `dmi_smbios3_present` and `dmi_present` on the buffer. These functions check that first 4 bytes is `_SM_` string, get `SMBIOS` version and gets `_DMI_` attributes as `DMI` structure table length, table address and etc... After one of these functions finish, you will see the result of it in the `dmesg` output:
+`_SM_`문자열은 `000F0000h`와 `0x000FFFFF` 사이에 있어야 합니다. 여기에서 우리는 16바이트를 동일한 `memcpy`에서 `memcpy_fromio`의 `buf`에 복사하고 버퍼에서 `dmi_smbios3_present`과 `dmi_present`를 실행합니다. 이 함수는 첫 4바이트가 `_SM_` 문자열인지 확인하고 `SMBIOS`버전을 얻고 `DMI`구조체 테이블 길이, 테이블 주소 등등 `_DMI_`의 속성을 얻습니다. 다음으로 이 함수 중 하나가 완료되면 `dmesg`출력에서 결과를 볼 수 있습니다:
 
 ```
 [    0.000000] SMBIOS 2.7 present.
 [    0.000000] DMI: Gigabyte Technology Co., Ltd. Z97X-UD5H-BK/Z97X-UD5H-BK, BIOS F6 06/17/2014
 ```
 
-In the end of the `dmi_scan_machine`, we unmap the previously remapped memory:
+`dmi_scan_machine`의 끝으로 우리는 이전에 재매핑된 메모리를 언매핑합니다:
 
 ```C
 dmi_early_unmap(p, 0x10000);
 ```
 
-The second function is - `dmi_memdev_walk`. As you can understand it goes over memory devices. Let's look on it:
+두 번째 함수는 `dmi_memdev_walk`입니다. 이해할 수 있도록 메모리 장치를 살펴봅시다:
 
 ```C
 void __init dmi_memdev_walk(void)
@@ -348,7 +349,7 @@ void __init dmi_memdev_walk(void)
 }
 ```
 
-It checks that `DMI` available (we got it in the previous function - `dmi_scan_machine`) and collects information about memory devices with `dmi_walk_early` and `dmi_alloc` which defined as:
+이것은 `DMI`가 사용가능한지(이전 함수 `dmi_scan_machine`에서 얻었습니다) 확인하고 `dmi_walk_early`에서 메모리 장치의 정보와 다음과 같이 정의된 `dmi_alloc`을 수집합니다.
 
 ```
 #ifdef CONFIG_DMI
@@ -356,7 +357,7 @@ RESERVE_BRK(dmi_alloc, 65536);
 #endif
 ```
 
-`RESERVE_BRK` defined in the [arch/x86/include/asm/setup.h](http://en.wikipedia.org/wiki/Desktop_Management_Interface) and reserves space with given size in the `brk` section.
+`RESERVE_BRK`은 [arch/x86/include/asm/setup.h](http://en.wikipedia.org/wiki/Desktop_Management_Interface)에 정의되었고 `brk`섹션에서 주어진 크기의 공간을 예약합니다.
 
 -------------------------
 	init_hypervisor_platform();
@@ -367,10 +368,10 @@ RESERVE_BRK(dmi_alloc, 65536);
 	early_gart_iommu_check();
 
 
-SMP config
+SMP 설정
 --------------------------------------------------------------------------------
 
-The next step is parsing of the [SMP](http://en.wikipedia.org/wiki/Symmetric_multiprocessing) configuration. We do it with the call of the `find_smp_config` function which just calls function:
+다음 단계는 [SMP](http://en.wikipedia.org/wiki/Symmetric_multiprocessing)구성의 분석입니다. 함수 내부를 호출하는 `find_smp_config`함수의 호출을 실행합니다:
 
 ```C
 static inline void find_smp_config(void)
@@ -379,7 +380,7 @@ static inline void find_smp_config(void)
 }
 ```
 
-inside. `x86_init.mpparse.find_smp_config` is the `default_find_smp_config` function from the [arch/x86/kernel/mpparse.c](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/arch/x86/kernel/mpparse.c). In the `default_find_smp_config` function we are scanning a couple of memory regions for `SMP` config and return if they are found:
+`x86_init.mpparse.find_smp_config`는 [arch/x86/kernel/mpparse.c](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/arch/x86/kernel/mpparse.c)의 `default_find_smp_config`함수에 있습니다. `default_find_smp_config`함수 안에서 우리는 `SMP`설정을 위해 몇 개의 메모리 지역을 스캔해서 그것들을 찾은 경우 반환합니다.
 
 ```C
 if (smp_scan_config(0x0, 0x400) ||
@@ -388,14 +389,14 @@ if (smp_scan_config(0x0, 0x400) ||
             return;
 ```
 
-First of all `smp_scan_config` function defines a couple of variables:
+우선 모든 `smp_scan_config`함수는 몇 가지 변수를 정의합니다:
 
 ```C
 unsigned int *bp = phys_to_virt(base);
 struct mpf_intel *mpf;
 ```
 
-First is virtual address of the memory region where we will scan `SMP` config, second is the pointer to the `mpf_intel` structure. Let's try to understand what is it `mpf_intel`. All information stores in the multiprocessor configuration data structure. `mpf_intel` presents this structure and looks:
+첫 번째는 `SMP`구성을 스캔 할 메모리 지역의 가상 주소이고, 두 번째는 `mpf_intel`구조체에 대한 포인터입니다. `mpf_intel`가 무엇인지 이해해봅시다. 모든 정보는 멀티 프로세서 구성 데이터 구조체에 저장됩니다. `mpf_intel`은 이 구조체에 있습니다:
 
 ```C
 struct mpf_intel {
@@ -412,7 +413,7 @@ struct mpf_intel {
 };
 ```
 
-As we can read in the documentation - one of the main functions of the system BIOS is to construct the MP floating pointer structure and the MP configuration table. And operating system must have access to this information about the multiprocessor configuration and `mpf_intel` stores the physical address (look at second parameter) of the multiprocessor configuration table. So, `smp_scan_config` going in a loop through the given memory range and tries to find `MP floating pointer structure` there. It checks that current byte points to the `SMP` signature, checks checksum, checks if `mpf->specification` is 1 or 4(it must be `1` or `4` by specification) in the loop:
+설명서에서 읽었듯이 시스템 BIOS의 주요 기능 중 하나는 MP 부동 포인터 구조체와 MP 구성 테이블을 구성하는 것입니다. 그리고 운영 체제는 멀티 프로세서 구성에 대한 정보에 접근해야하며 `mpf_intel`은 멀티프로세서 구성 테이블의 물리적 주소(두 번째 매개변수를 참조)를 저장해야합니다. 따라서 `smp_scan_config`는 주어진 메모리 범위를 통해서 루프를 탐색하고 그곳에서 `MP floating pointer structure`를 찾으려 시도합니다. 현재 바이트 포인터가 `SMP`서명을 가리키는 지 확인하고 체크썸을 확인합니다. 그리고 루프에서 `mpf->specification`가 1 또는 4(`1` 또는 `4`로 설명되어야 함)인지 확인합니다:
 
 ```C
 while (length > 0) {
@@ -430,12 +431,12 @@ if ((*bp == SMP_MAGIC_IDENT) &&
 }
 ```
 
-reserves given memory block if search is successful with `memblock_reserve` and reserves physical address of the multiprocessor configuration table. You can find documentation about this in the - [MultiProcessor Specification](http://www.intel.com/design/pentium/datashts/24201606.pdf). You can read More details in the special part about `SMP`.
+`memblock_reserve`의 검색에 성공하면 주어진 메모리 블록을 예약하고 멀티프로세서 구성 테이블의 물리적 주소를 예약합니다. 이것에 관한 문서 - [멀티프로세서 설명서](http://www.intel.com/design/pentium/datashts/24201606.pdf)에서 찾아볼 수 있습니다. `SMP` 특별 파트에서도 더 상세한 내용을 읽을 수 있습니다.
 
-Additional early memory initialization routines
+추가적인 초기 메모리 초기화 루틴
 --------------------------------------------------------------------------------
 
-In the next step of the `setup_arch` we can see the call of the `early_alloc_pgt_buf` function which allocates the page table buffer for early stage. The page table buffer will be placed in the `brk` area. Let's look on its implementation:
+`setup_arch`의 다음 단계에서 우리는 초기 단계를 위해 페이지 테이블 버퍼를 할당하는 `early_alloc_pgt_buf`함수의 호출을 볼 수 있습니다. 페이지 테이블 버퍼는 `brk`영역에 배치됩니다. 구현을 살펴봅시다:
 
 ```C
 void  __init early_alloc_pgt_buf(void)
@@ -451,7 +452,7 @@ void  __init early_alloc_pgt_buf(void)
 }
 ```
 
-First of all it get the size of the page table buffer, it will be `INIT_PGT_BUF_SIZE` which is `(6 * PAGE_SIZE)` in the current linux kernel 4.0. As we got the size of the page table buffer, we call `extend_brk` function with two parameters: size and align. As you can understand from its name, this function extends the `brk` area. As we can see in the linux kernel linker script `brk` is in memory right after the [BSS](http://en.wikipedia.org/wiki/.bss):
+첫째로 페이지 테이블 버퍼의 크기를 얻으면 현재 리눅스 커널 4.0에서 `(6 * PAGE_SIZE)`의 `INIT_PGT_BUF_SIZE`가 될 것입니다. 따라서 페이지 테이블 버퍼의 크기를 얻으면 크기와 정렬이라는 두 매개변수를 사용해 `extend_brk`함수를 호출합니다. 이름에서 알 수 있듯이 이 함수는 `brk`영역을 확장합니다. 리눅스 커널 스크립트 `brk`는 [BSS](http://en.wikipedia.org/wiki/.bss)의 바로 다음 메모리에서 볼 수 있습니다:
 
 ```C
 	. = ALIGN(PAGE_SIZE);
@@ -463,11 +464,11 @@ First of all it get the size of the page table buffer, it will be `INIT_PGT_BUF_
 	}
 ```
 
-Or we can find it with `readelf` util:
+또는 `readelf`유틸을 사용해서 찾을 수 있습니다:
 
 ![brk area](http://oi61.tinypic.com/71lkeu.jpg)
 
-After that we got physical address of the new `brk` with the `__pa` macro, we calculate the base address and the end of the page table buffer. In the next step as we got page table buffer, we reserve memory block for the brk area with the `reserve_brk` function:
+`__pa`매크로를 통해 새로운 `brk`의 물리적 주소를 얻었으면, 기본 주소와 페이지 테이블 버퍼의 끝을 계산합니다. 다음 단계는 페이지 테이블 주소를 얻었으니 `reserve_brk`함수를 사용해서 brk영역을 위한 메모리 블록을 예약합니다.
 
 ```C
 static void __init reserve_brk(void)
@@ -480,7 +481,7 @@ static void __init reserve_brk(void)
 }
 ```
 
-Note that in the end of the `reserve_brk`, we set `brk_start` to zero, because after this we will not allocate it anymore. The next step after reserving memory block for the `brk`, we need to unmap out-of-range memory areas in the kernel mapping with the `cleanup_highmap` function. Remember that kernel mapping is `__START_KERNEL_map` and `_end - _text` or `level2_kernel_pgt` maps the kernel `_text`, `data` and `bss`. In the start of the `clean_high_map` we define these parameters:
+참고로 `reserve_brk`의 끝에서 아무것도 할당하지 않기 때문에 `brk_start`을 0으로 설정했습니다. ` brk`를 위한 메모리 블록을 예약한 다음 `cleanup_highmap`함수를 사용해 커널 매핑 범위를 벗어난 메모리 영역을 언매핑해야합니다. 커널 매핑이 `__START_KERNEL_map`과 `_end - _text` 또는 `_text`커널을 매핑하는 `level2_kernel_pgt`, `data`와 `bss`인 것을 기억하십시오. `clean_high_map`의 시작에서 다음과 같은 매개변수들을 정의합니다.
 
 ```C
 unsigned long vaddr = __START_KERNEL_map;
@@ -489,8 +490,7 @@ pmd_t *pmd = level2_kernel_pgt;
 pmd_t *last_pmd = pmd + PTRS_PER_PMD;
 ```
 
-Now, as we defined start and end of the kernel mapping, we go in the loop through the all kernel page middle directory entries and clean entries which are not between `_text` and `end`:
-
+커널 매핑의 시작과 끝이 정의된 지금, 우리는 `_text`와 `end`사이에 있지 않은 모든 커널 페이지 미들 디렉터리 엔트리와 클린 엔트리를 통해 루프로 이동합니다:
 ```C
 for (; pmd < last_pmd; pmd++, vaddr += PMD_SIZE) {
         if (pmd_none(*pmd))
@@ -500,7 +500,7 @@ for (; pmd < last_pmd; pmd++, vaddr += PMD_SIZE) {
 }
 ```
 
-After this we set the limit for the `memblock` allocation with the `memblock_set_current_limit` function (read more about `memblock` you can in the [Linux kernel memory management Part 2](https://github.com/0xAX/linux-insides/blob/master/MM/linux-mm-2.md)), it will be `ISA_END_ADDRESS` or `0x100000` and fill the `memblock` information according to `e820` with the call of the `memblock_x86_fill` function. You can see the result of this function in the kernel initialization time:
+그 후에 `memblock_set_current_limit`함수(`memblock`에 대한 것은[리눅스 커널 메모리 관리 파트 2](https://github.com/0xAX/linux-insides/blob/master/MM/linux-mm-2.md)에서 읽을 수 있습니다)를 사용해 `memblock`할당을 위한 제한을 설정합니다. 그것은 `ISA_END_ADDRESS` 또는 `0x100000`가 되고 `memblock_x86_fill`함수의 호출 `e820`에 따라서 `memblock`의 정보를 채웁니다. 커널 초기화 시간에서 이 함수의 결과를 볼 수 있습니다.
 
 ```
 MEMBLOCK configuration:
@@ -519,7 +519,7 @@ The rest functions after the `memblock_x86_fill` are: `early_reserve_e820_mpc_ne
 
 That's all. You can note that this part will not cover all functions which are in the `setup_arch` (like `early_gart_iommu_check`, [mtrr](http://en.wikipedia.org/wiki/Memory_type_range_register) initialization, etc.). As I already wrote many times, `setup_arch` is big, and linux kernel is big. That's why I can't cover every line in the linux kernel. I don't think that we missed something important, but you can say something like: each line of code is important. Yes, it's true, but I missed them anyway, because I think that it is not realistic to cover full linux kernel. Anyway we will often return to the idea that we have already seen, and if something is unfamiliar, we will cover this theme.
 
-Conclusion
+결론
 --------------------------------------------------------------------------------
 
 It is the end of the sixth part about linux kernel initialization process. In this part we continued to dive in the `setup_arch` function again and it was long part, but we are not finished with it. Yes, `setup_arch` is big, hope that next part will be the last part about this function.
@@ -528,22 +528,21 @@ If you have any questions or suggestions write me a comment or ping me at [twitt
 
 **Please note that English is not my first language, And I am really sorry for any inconvenience. If you find any mistakes please send me PR to [linux-insides](https://github.com/0xAX/linux-insides).**
 
-Links
+링크
 --------------------------------------------------------------------------------
 
-* [MultiProcessor Specification](http://en.wikipedia.org/wiki/MultiProcessor_Specification)
+* [멀티프로세서 설명서](http://en.wikipedia.org/wiki/MultiProcessor_Specification)
 * [NX bit](http://en.wikipedia.org/wiki/NX_bit)
 * [Documentation/kernel-parameters.txt](https://github.com/torvalds/linux/blob/master/Documentation/admin-guide/kernel-parameters.rst)
 * [APIC](http://en.wikipedia.org/wiki/Advanced_Programmable_Interrupt_Controller)
-* [CPU masks](https://0xax.gitbooks.io/linux-insides/content/Concepts/linux-cpu-2.html)
-* [Linux kernel memory management](https://0xax.gitbooks.io/linux-insides/content/MM/index.html)
+* [CPU 마스크](https://0xax.gitbooks.io/linux-insides/content/Concepts/linux-cpu-2.html)
+* [리눅스 커널 메모리 관리](https://0xax.gitbooks.io/linux-insides/content/MM/index.html)
 * [PCI](http://en.wikipedia.org/wiki/Conventional_PCI)
 * [e820](http://en.wikipedia.org/wiki/E820)
-* [System Management BIOS](http://en.wikipedia.org/wiki/System_Management_BIOS)
-* [System Management BIOS](http://en.wikipedia.org/wiki/System_Management_BIOS)
+* [시스템 관리 BIOS](http://en.wikipedia.org/wiki/System_Management_BIOS)
 * [EFI](http://en.wikipedia.org/wiki/Unified_Extensible_Firmware_Interface)
 * [SMP](http://en.wikipedia.org/wiki/Symmetric_multiprocessing)
-* [MultiProcessor Specification](http://www.intel.com/design/pentium/datashts/24201606.pdf)
+* [멀티프로세서 설명서](http://www.intel.com/design/pentium/datashts/24201606.pdf)
 * [BSS](http://en.wikipedia.org/wiki/.bss)
-* [SMBIOS specification](http://www.dmtf.org/sites/default/files/standards/documents/DSP0134v2.5Final.pdf)
-* [Previous part](https://0xax.gitbooks.io/linux-insides/content/Initialization/linux-initialization-5.html)
+* [SMBIOS 설명서](http://www.dmtf.org/sites/default/files/standards/documents/DSP0134v2.5Final.pdf)
+* [이전 파트](https://0xax.gitbooks.io/linux-insides/content/Initialization/linux-initialization-5.html)

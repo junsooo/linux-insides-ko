@@ -1,14 +1,13 @@
-커널 부팅 과정. Part 4.
-================================================================================
+커널 부팅 과정. Part 4
 
 64 bit 모드로 전환
 --------------------------------------------------------------------------------
 
- 커널 부팅 프로세스의 네 번째 부분으로 우리는 [보호 모드](http://en.wikipedia.org/wiki/Protected_mode) 첫 단계를 배울 것 입니다. CPU가 [롱 모드](http://en.wikipedia.org/wiki/Long_mode) 와 [SSE](http://en.wikipedia.org/wiki/Streaming_SIMD_Extensions)를 지원하는지 확인하고, [페이징](http://en.wikipedia.org/wiki/Paging), 페이지 테이블을 초기화하기 등 결국 우리는 [롱 모드](https://en.wikipedia.org/wiki/Long_mode)로의 전환에 대해 논의합니다.
+ 커널 부팅 프로세스의 네 번째 부분으로 우리는 [보호 모드](http://en.wikipedia.org/wiki/Protected_mode)의 첫 단계를 배울 것 입니다. CPU가 [롱 모드](http://en.wikipedia.org/wiki/Long_mode)와 [SSE](http://en.wikipedia.org/wiki/Streaming_SIMD_Extensions)를 지원하는지 확인하고, [페이징](http://en.wikipedia.org/wiki/Paging), 페이지 테이블을 초기화하기 등 궁극적으로 우리는 [롱 모드](https://en.wikipedia.org/wiki/Long_mode)로의 전환에 대해 논의할 것입니다.
 
 **NOTE: there will be much assembly code in this part, so if you are not familiar with that, you might want to consult a book about it**
 
-이전 [부분](https://github.com/0xAX/linux-insides/blob/v4.16/Booting/linux-bootstrap-3.md)에서 우리는 [arch/x86/boot/pmjump.S](https://github.com/torvalds/linux/blob/v4.16/arch/x86/boot/pmjump.S)의 `32-bit` 진입 점으로 점프하는 것을 멈췄습니다:
+[이전 부분](https://github.com/0xAX/linux-insides/blob/v4.16/Booting/linux-bootstrap-3.md)에서 우리는 [arch/x86/boot/pmjump.S](https://github.com/torvalds/linux/blob/v4.16/arch/x86/boot/pmjump.S)의 `32-bit` 진입 점으로 점프하는 데서 멈췄습니다:
 
 ```assembly
 jmpl	*%eax
@@ -41,7 +40,7 @@ fs             0x18	24
 gs             0x18	24
 ```
 
- 여기서 cs 레즈스터에 - `0x10` ([이전 부분](https://github.com/0xAX/linux-insides/blob/v4.16/Booting/linux-bootstrap-3.md)에서 기억할 수 있듯이, `Global Descriptor Table`의 두 번째 인덱스 인 것을 알 수 있습니다.)이 포함되어 있음을 알 수 있고, `eip` 레지스터에 `0x100000`이 포함되어 있으며 코드 세그먼트를 포함한 모든 세그먼트의 기본 주소는 0입니다.
+ 여기서 cs 레지스터에 - `0x10` ([이전 부분](https://github.com/0xAX/linux-insides/blob/v4.16/Booting/linux-bootstrap-3.md)에서 기억할 수 있듯이, `Global Descriptor Table`의 두 번째 인덱스 인 것을 알 수 있습니다.)이 포함되어 있음을 알 수 있고, `eip` 레지스터에 `0x100000`이 포함되어 있으며 코드 세그먼트를 포함한 모든 세그먼트의 기본 주소는 0입니다.
 
 따라서 실제 주소를 얻을 수 있습니다. 부팅 프로토콜에서 지정한대로, `0:0x100000` 또는 `0x100000` 입니다. 이제 32-bit 진입점부터 시작하겠습니다.
 
@@ -93,7 +92,7 @@ endif
 
 이제 시작 위치를 알았으니 해보겠습니다.
 
-필요시 세그먼트를 다시 로드
+필요 시 세그먼트를 다시 로드
 --------------------------------------------------------------------------------
 
 위에서 설명한 것처럼, [arch/x86/boot/compressed/head_64.S](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/arch/x86/boot/compressed/head_64.S)
@@ -105,13 +104,13 @@ endif
 ENTRY(startup_32)
 ```
 
-`__HEAD`는 [include / linux / init.h](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/include/linux/init.h) 헤더 파일에 정의 된 매크로이며 다음 섹션의 정의를 확장한다:
+`__HEAD`는 [include / linux / init.h](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/include/linux/init.h) 헤더 파일에 정의 된 매크로이며 다음 섹션의 정의를 확장합니다:
 
 ```C
 #define __HEAD		.section	".head.text","ax"
 ```
 
-`.head.text` 이름과 `ax` 플래그와 함께. 이 경우이 플래그는이 섹션이 [실행 가능](https://en.wikipedia.org/wiki/Executable)이거나 다른 말로 코드를 포함하고 있음을 나타냅니다. 이 섹션의 정의는 [arch / x86 / boot / compressed / vmlinux.lds.S](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/arch/x86/boot/compressed/vmlinux에서 찾을 수 있습니다. .lds.S) 링커 스크립트:
+`.head.text`이름과 `ax` 플래그에서. 플래그는 이 섹션이 [실행 가능](https://en.wikipedia.org/wiki/Executable)하거나 코드를 포함하고 있음을 나타냅니다. 이 섹션의 정의는 [arch / x86 / boot / compressed / vmlinux.lds.S](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/arch/x86/boot/compressed/vmlinux.lds.S) 링커 스크립트에서 찾을 수 있습니다:
 
 ```
 SECTIONS
@@ -135,7 +134,7 @@ head_64.S의 일부분은 startup_32가 주소 0에 있다고 가정한다는 �
 
 ```
 
-자, 이제 우리는 현재 위치를 알고 있으며, 이제`startup_32` 함수를 살펴볼 시간이다.
+자, 이제 우리는 현재 위치를 알고 있으며, 이제`startup_32` 함수를 살펴볼 시간입니다.
 
 `startup_32` 함수의 시작 부분에서 우리는 [flags](https://en.wikipedia.org/wiki/FLAGS_register) 레지스터에서 `DF` 비트를 지우는 `cld` 명령을 볼 수 있습니다. 방향 플래그가 지워지면 [stos](http://x86.renejeschke.de/html/file_module_x86_id_306.html), [scas](http://x86.renejeschke.de/html/file_module_x86_id_287.html) 등과 같은 모든 문자열 연``은 인덱스 레지스터 `esi` 또는`edi`를 증가시킵니다. 나중에 페이지 테이블 등의 공간을 비우기 위해 문자열 연산을 사용하므로 방향 플래그를 지워야합니다.
 
@@ -187,7 +186,7 @@ call label
 label: pop %reg
 ```
 
-그 후,`% reg` 레지스터는 레이블의 주소를 포함 할 것입니다. 리눅스 커널에서 `startup_32`의 주소를 검색하는 비슷한 코드를 봅시다:
+그 후,`% reg`레지스터는 레이블의 주소를 가질 것입니다. 리눅스 커널에서 `startup_32`의 주소를 검색하는 비슷한 코드를 봅시다:
 
 ```assembly
         leal	(BP_scratch+4)(%esi), %esp
@@ -196,7 +195,7 @@ label: pop %reg
         subl	$1b, %ebp
 ```
 
-이전 부분에서 보았듯 `esi` 레지스터에는 우리가 보호 모드로 이동하기 전에 채워진 구조인 [boot_params](https://github.com/torvalds/linux/blob/v4.16/arch/x86/include/uapi/asm/bootparam.h#L113) 구조가 있다. `boot_params` 구조는 오프셋이 0x1e4 인 특수 필드 `scratch`를 포함합니다. 이 4 바이트 필드는 `call` 명령을 위한 임시 스택입니다. `scratch` 필드 +`4` 바이트의 주소를 가져 와서`esp` 레지스터에 넣습니다. 방금 설명한 것처럼 임시 스택이고 스택은`x86_64` 아키텍처에서 위에서 아래로 커지기 때문에 'BP_scratch'필드의 베이스에 `4` 바이트를 추가합니다. 따라서 스택 포인터는 스택의 상단을 가리 킵니다. 다음으로 위에서 설명한 패턴을 볼 수 있습니다. `call` 명령어가 실행 된 후 스택 맨 위에 리턴 주소가 있으므로`1f` 레이블을 호출하고 이 레이블의 주소를`ebp` 레지스터에 넣습니다. 이제 우리는`1f` 레이블의 주소를 가지게되었고 이제는`startup_32`의 주소를 얻는 것이 쉽습니다. 스택에서 얻은 주소에서 레이블 주소를 빼면됩니다:
+이전 부분에서 보았듯 `esi` 레지스터에는 우리가 보호 모드로 이동하기 전에 채워진 구조체인 [boot_params](https://github.com/torvalds/linux/blob/v4.16/arch/x86/include/uapi/asm/bootparam.h#L113) 구조체가 있습니==. `boot_params` 구조체는 오프셋이 0x1e4 인 특수 필드 `scratch`를 포함합니다. 이 4 바이트 필드는 `call` 명령을 위한 임시 스택입니다. `scratch` 필드 +`4` 바이트의 주소를 가져 와서`esp` 레지스터에 넣습니다. 방금 설명한 것처럼 임시 스택이고 스택은`x86_64` 아키텍처에서 위에서 아래로 커지기 때문에 'BP_scratch'필드의 베이스에 `4` 바이트를 추가합니다. 따라서 스택 포인터는 스택의 상단을 가리 킵니다. 다음으로 위에서 설명한 패턴을 볼 수 있습니다. `call` 명령어가 실행 된 후 스택 맨 위에 리턴 주소가 있으므로`1f` 레이블을 호출하고 이 레이블의 주소를`ebp` 레지스터에 넣습니다. 이제 우리는`1f` 레이블의 주소를 가지게되었고 이제는`startup_32`의 주소를 얻는 것은 쉽습니다. 스택에서 얻은 주소에서 레이블 주소를 빼면됩니다:
 
 ```
 startup_32 (0x0)     +-----------------------+
@@ -310,7 +309,7 @@ no_longmode:
 재배치 주소 계산
 --------------------------------------------------------------------------------
 
-다음 단계는 필요한 경우 압축 해제를 위한 재배치 주소를 계산하는 것입니다. 먼저, 커널이 `재배치 가능하다`는 것이 무엇을 의미하는지 알아야합니다. 우리는 이미 리눅스 커널의 32 비트 진입 점의 기본 주소는`0x100000`인 것을 이미 알고 있습니다. 하지만 이것은 32 비트 진입 점입니다. 리눅스 커널의 기본 주소는 `CONFIG_PHYSICAL_START` 커널 설정 옵션의 값에 의해 결정됩니다. 기본값은 `0x1000000` 또는`16 MB`입니다. 여기서 가장 큰 문제는 리눅스 커널이 충돌하면 커널 개발자는 다른 주소에서 로드하도록 구성된 [kdump](https://www.kernel.org/doc/Documentation/kdump/kdump.txt)에 대한 `rescue kernel`이 있어야 한다는 것입니다. 리눅스 커널은 이 문제를 해결하기위한 특별한 설정 옵션을 제공합니다 :`CONFIG_RELOCATABLE`. 리눅스 커널의 문서에서 볼 수 있다:
+다음 단계는 필요한 경우 압축 해제를 위한 재배치 주소를 계산하는 것입니다. 먼저, 커널이 `재배치 가능하다`는 것이 무엇을 의미하는지 알아야합니다. 우리는 이미 리눅스 커널의 32 비트 진입 점의 기본 주소는`0x100000`인 것을 이미 알고 있습니다. 하지만 이것은 32 비트 진입 점입니다. 리눅스 커널의 기본 주소는 `CONFIG_PHYSICAL_START` 커널 설정 옵션의 값에 의해 결정됩니다. 기본값은 `0x1000000` 또는`16 MB`입니다. 여기서 가장 큰 문제는 리눅스 커널이 충돌하면 커널 개발자는 다른 주소에서 로드하도록 구성된 [kdump](https://www.kernel.org/doc/Documentation/kdump/kdump.txt)에 대한 `rescue kernel`이 있어야 한다는 것입니다. 리눅스 커널은 이 문제를 해결하기위한 특별한 설정 옵션인 `CONFIG_RELOCATABLE`를 제공합니다. 리눅스 커널의 문서에서도 볼 수 있습니다:
 
 ```
 재배치 정보를 유지하는 커널 이미지를 만듭니다.
@@ -396,11 +395,11 @@ gdt:
 gdt_end:
 ```
 
-우리는 `.data`섹션에 있으며 5 개의 디스크립터를 포함하고 있음을 알 수 있다. 첫 번째는 커널 코드 세그먼트를 위한 32 비트 디스크립터, 64 비트 커널 세그먼트, 커널 데이터 세그먼트 및 2 개의 태스크 디스크립터이다.
+우리는 `.data`섹션에 있으며 5 개의 디스크립터를 포함하고 있음을 알 수 있습니다. 첫 번째는 커널 코드 세그먼트를 위한 32 비트 디스크립터, 64 비트 커널 세그먼트, 커널 데이터 세그먼트 및 2 개의 태스크 디스크립터입니다.
 
-우리는 이미 이전 [부분](https://github.com/0xAX/linux-insides/blob/v4.16/Booting/linux-bootstrap-3.md)에서 `Global Descriptor Table`을 로드했으며, 거의 똑같지만 `64` 비트 모드에서 실행하기 위해 `CS.L = 1` 및 `CS.D = 0` 인 디스크립터이다. 보시다시피 `gdt`의 정의는 두 바이트부터 시작합니다: `gdt_end-gdt`는 `gdt` 테이블 또는 테이블 제한의 마지막 바이트를 나타냅니다. 다음 4 바이트는`gdt`의 기본 주소를 포함합니다.
+우리는 이미 [이전 부분](https://github.com/0xAX/linux-insides/blob/v4.16/Booting/linux-bootstrap-3.md)에서 `Global Descriptor Table`을 로드했으며, 거의 똑같지만 `64` 비트 모드에서 실행하기 위해 `CS.L = 1` 및 `CS.D = 0`인 디스크립터입니다. 보시다시피 `gdt`의 정의는 두 바이트부터 시작합니다: `gdt_end-gdt`는 `gdt` 테이블 또는 테이블 제한의 마지막 바이트를 나타냅니다. 다음 4 바이트는`gdt`의 기본 주소를 포함합니다.
 
-`lgdt` 명령어로 `Global Descriptor Table`을로드 한 후,`cr4` 레지스터의 값을 `eax`에 넣어 [PAE](http://en.wikipedia.org/wiki/Physical_Address_Extension)를 활성화해야합니다. 5번째 비트를 설정하고 다시 `cr4`로 로드:
+`lgdt` 명령어로 `Global Descriptor Table`을 로드 한 후,`cr4` 레지스터의 값을 `eax`에 넣어 [PAE](http://en.wikipedia.org/wiki/Physical_Address_Extension)를 활성화해야합니다. 5번째 비트를 설정하고 다시 `cr4`로 로드:
 
 ```assembly
 	movl	%cr4, %eax
@@ -423,7 +422,7 @@ gdt_end:
 * 64 비트 주소 및 피연산자;
 * RIP 상대 주소 지정 (다음 부분에서 예를 볼 것입니다).
 
-긴 모드는 레거시 보호 모드의 확장입니다. 두 개의 하위 모드로 구성됩니다:
+롱 모드는 레거시 보호 모드의 확장입니다. 두 개의 하위 모드로 구성됩니다:
 
 * 64-bit 모드;
 * 호환 모드.
@@ -493,7 +492,7 @@ pgtable:
 	movl	%eax, 0(%edi)
 ```
 
-여기서 다시 우리는 `ebx`에 상대적인, 다시 말해 `startup_32`의 주소에 상대적인 `pgtable`의 주소를 `edi` 레지스터에 넣었다. 다음으로, 이 주소를 `eax` 레지스터에 오프셋 `0x1007`로 넣습니다. `0x1007`은 `PML4`+`7`의 크기 인 `4096` 바이트입니다. 여기서 `7`은 `PML4` 항목의 플래그를 나타냅니다. 이 경우 이 플래그는 `PRESENT+RW+USER` 입니다. 결국 첫 번째 `PDP` 항목의 주소를 먼저 `PML4`에 씁니다.
+여기서 다시 우리는 `ebx`에 상대적인, 다시 말해 `startup_32`의 주소에 상대적인 `pgtable`의 주소를 `edi` 레지스터에 넣었습니다. 다음으로, 이 주소를 `eax` 레지스터에 오프셋 `0x1007`로 넣습니다. `0x1007`은 `PML4`+`7`의 크기 인 `4096` 바이트입니다. 여기서 `7`은 `PML4` 항목의 플래그를 나타냅니다. 이 경우 이 플래그는 `PRESENT+RW+USER` 입니다. 결국 첫 번째 `PDP` 항목의 주소를 먼저 `PML4`에 씁니다.
 
 다음 단계에서 우리는 동일한 `PRESENT+RW+USE` 플래그를 가진 `Page Directory Pointer` 테이블에 4 개의 `Page Directory` 엔트리를 구축 할 것입니다:
 

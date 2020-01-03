@@ -1,17 +1,17 @@
-System calls in the Linux kernel. Part 3.
+리눅스 커널에서의 시스템 콜. Part 3.
 ================================================================================
 
-vsyscalls and vDSO
+vsyscalls 와 vDSO
 --------------------------------------------------------------------------------
 
-This is the third part of the [chapter](https://0xax.gitbooks.io/linux-insides/content/SysCall/index.html) that describes system calls in the Linux kernel and we saw preparations after a system call caused by a userspace application and process of handling of a system call in the previous [part](https://0xax.gitbooks.io/linux-insides/content/SysCall/linux-syscall-2.html). In this part we will look at two concepts that are very close to the system call concept, they are called `vsyscall` and `vdso`.
+이것은 Linux 커널에서 시스템 호출을 설명하는 [챕터](https://junsoolee.gitbook.io/linux-insides-ko/summary/syscall)의 세 번째 파트이며, 사용자 공간 응용 프로그램 이전 [파트](https://junsoolee.gitbook.io/linux-insides-ko/summary/syscall/linux-syscall-2)에서 시스템 콜 처리 프로세스로 인한 시스템 호출 후의 준비 사항을 확인했습니다. 이 파트에서는 시스템 콜 개념에 매우 가까운 두 가지 개념인 `vsyscall`과 `vdso`를 살펴 보겠습니다.
 
-We already know what `system call`s are. They are special routines in the Linux kernel which userspace applications ask to do privileged tasks, like to read or to write to a file, to open a socket, etc. As you may know, invoking a system call is an expensive operation in the Linux kernel, because the processor must interrupt the currently executing task and switch context to kernel mode, subsequently jumping again into userspace after the system call handler finishes its work. These two mechanisms - `vsyscall` and `vdso` are designed to speed up this process for certain system calls and in this part we will try to understand how these mechanisms work.
+우리는 이미 `시스템 콜`이 무엇인지 알고 있습니다. 시스템 콜은 사용자 공간 응용 프로그램이 파일 읽기 또는 쓰기, 소켓 열기 등과 같은 권한있는 작업을 수행하도록 요청하는 Linux 커널의 특수 루틴입니다. 아시다시피, 시스템 콜 호출은 Linux에서 비용이 많이 드는 작업입니다. 프로세서는 현재 실행중인 작업을 중단하고 컨텍스트를 커널 모드로 전환해야하기 때문에 시스템 호출 처리기가 작업을 완료 한 후 사용자 공간으로 다시 점프해야합니다. 이 두 가지 메커니즘인 `vsyscall`과 `vdso`는 특정 시스템 호출에 대해 이 프로세스의 속도를 높이도록 설계되었으며 이 부분에서는 이러한 메커니즘의 작동 방식을 이해하려고합니다.
 
-Introduction to vsyscalls
+vsyscall 소개
 --------------------------------------------------------------------------------
 
-The `vsyscall` or `virtual system call` is the first and oldest mechanism in the Linux kernel that is designed to accelerate execution of certain system calls. The principle of work of the `vsyscall` concept is simple. The Linux kernel maps into user space a page that contains some variables and the implementation of some system calls. We can find information about this memory space in the Linux kernel [documentation](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/Documentation/x86/x86_64/mm.txt) for the [x86_64](https://en.wikipedia.org/wiki/X86-64):
+`vsyscall` 또는 `virtual system call` 은 특정 시스템 호출의 실행을 가속화하도록 설계된 Linux 커널에서 최초이자 가장 오래된 메커니즘입니다. `vsyscall` 개념의 작동 원리는 간단합니다. Linux 커널은 일부 변수와 일부 시스템 호출 구현이 포함 된 페이지를 사용자 공간에 매핑합니다. 이 메모리 공간에 대한 정보는 [x86_64](https://en.wikipedia.org/wiki/X86-64)의 Linux 커널 [문서](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/Documentation/x86/x86_64/mm.txt)에서 찾을 수 있습니다. :
 
 ```
 ffffffffff600000 - ffffffffffdfffff (=8 MB) vsyscalls
@@ -24,9 +24,9 @@ or:
 ffffffffff600000-ffffffffff601000 r-xp 00000000 00:00 0                  [vsyscall]
 ```
 
-After this, these system calls will be executed in userspace and this means that there will not be [context switching](https://en.wikipedia.org/wiki/Context_switch). Mapping of the `vsyscall` page occurs in the `map_vsyscall` function that is defined in the [arch/x86/entry/vsyscall/vsyscall_64.c](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/arch/x86/entry/vsyscall/vsyscall_64.c) source code file. This function is called during the Linux kernel initialization in the `setup_arch` function that is defined in the [arch/x86/kernel/setup.c](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/arch/x86/kernel/setup.c) source code file (we saw this function in the fifth [part](https://0xax.gitbooks.io/linux-insides/content/Initialization/linux-initialization-5.html) of the Linux kernel initialization process chapter).
+그 후, 이러한 시스템 호출은 사용자 공간에서 실행되며 이는 [컨텍스트 전환]이 없음을 의미합니다. `vsyscall` 페이지의 매핑은 [arch/x86/ entry/vsyscall/vsyscall_64.c](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/arch/x86/entry/vsyscall/vsyscall_64.c) 소스 코드 파일에 정의 된 `map_vsyscall` 함수에서 발생합니다. 이 함수는 Linux 커널을 초기화하는 동안에 [arch/x86/kernel/setup.c](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/arch/x86/kernel/setup.c) 소스 코드 파일에 정의 된 `setup_arch` 함수에서 호출됩니다 (이 함수는 Linux 커널 초기화의 다섯 번째 [파트]에서 보았습니다).
 
-Note that implementation of the `map_vsyscall` function depends on the `CONFIG_X86_VSYSCALL_EMULATION` kernel configuration option:
+`map_vsyscall` 함수의 구현은 `CONFIG_X86_VSYSCALL_EMULATION` 커널 설정 옵션에 따라 다릅니다. :
 
 ```C
 #ifdef CONFIG_X86_VSYSCALL_EMULATION
@@ -36,7 +36,7 @@ static inline void map_vsyscall(void) {}
 #endif
 ```
 
-As we can read in the help text, the `CONFIG_X86_VSYSCALL_EMULATION` configuration option: `Enable vsyscall emulation`. Why emulate `vsyscall`? Actually, the `vsyscall` is a legacy [ABI](https://en.wikipedia.org/wiki/Application_binary_interface) due to security reasons. Virtual system calls have fixed addresses, meaning that `vsyscall` page is still at the same location every time and the location of this page is determined in the `map_vsyscall` function. Let's look on the implementation of this function: 
+도움말 텍스트에서 읽을 수 있듯이 `CONFIG_X86_VSYSCALL_EMULATION` 설정 옵션은 `vsyscall 모방을 가능하게 함` 입니다. 왜 `vsyscall`을 모방할까요? 실제로 `vsyscall`은 보안상의 이유로 레거시 [ABI](https://en.wikipedia.org/wiki/Application_binary_interface)입니다. 가상 시스템 호출의 주소는 고정되어 있습니다. 즉, `vsyscall` 페이지는 매번 같은 위치에 있으며 이 페이지의 위치는 `map_vsyscall` 함수에서 결정됩니다. 이 함수의 구현을 살펴봅시다. :
 
 ```C
 void __init map_vsyscall(void)
@@ -49,13 +49,13 @@ void __init map_vsyscall(void)
 }
 ```
 
-As we can see, at the beginning of the `map_vsyscall` function we get the physical address of the `vsyscall` page with the `__pa_symbol` macro (we already saw implementation if this macro in the fourth [path](https://0xax.gitbooks.io/linux-insides/content/Initialization/linux-initialization-4.html) of the Linux kernel initialization process). The `__vsyscall_page` symbol defined in the [arch/x86/entry/vsyscall/vsyscall_emu_64.S](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/arch/x86/entry/vsyscall/vsyscall_emu_64.S) assembly source code file and have the following [virtual address](https://en.wikipedia.org/wiki/Virtual_address_space):
+보시다시피, `map_vsyscall` 함수의 시작 부분에서 우리는 `__pa_symbol` 매크로를 가진 `vsyscall` 페이지의 물리적 주소를 얻습니다(우리는 이미 리눅스 커널 초기화 프로세스의 네 번째 [파트]에서 이 매크로가 구현 된 것을 보았습니다). 어셈블리 소스 코드 파일 [arch/x86/entry/vsyscall/vsyscall_emu_64.S](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/arch/x86/entry/vsyscall/vsyscall_emu_64.S)에 정의 된 `__vsyscall_page` 기호는 다음과 같은 [가상 주소](https://en.wikipedia.org/wiki/Virtual_address_space)를 갖습니다. :
 
 ```
 ffffffff81881000 D __vsyscall_page
 ```
 
-in the `.data..page_aligned, aw` [section](https://en.wikipedia.org/wiki/Memory_segmentation) and contains call of the three following system calls:
+`.data..page_aligned, aw` [section](https://en.wikipedia.org/wiki/Memory_segmentation)에서 다음 세 가지 시스템 콜에 대한 호출을 포함합니다. :
 
 * `gettimeofday`;
 * `time`;
@@ -80,7 +80,7 @@ __vsyscall_page:
 	ret
 ```
 
-Let's go back to the implementation of the `map_vsyscall` function and return to the implementation of the `__vsyscall_page` later. After we received the physical address of the `__vsyscall_page`, we check the value of the `vsyscall_mode` variable and set the [fix-mapped](https://0xax.gitbooks.io/linux-insides/content/MM/linux-mm-2.html) address for the `vsyscall` page with the `__set_fixmap` macro:
+우선 `map_vsyscall` 함수의 구현으로 돌아가고 나중에 `__vsyscall_page`의 구현으로 돌아갑시다. `__vsyscall_page`의 물리적 주소를 수신 한 후 `vsyscall_mode` 변수의 값을 확인하고 `__set_fixmap` 매크로를 사용하여 `vsyscall` 페이지의 [fix-mapped](https://junsoolee.gitbook.io/linux-insides-ko/summary/mm/linux-mm-2) 주소를 설정합니다. :
 
 ```C
 if (vsyscall_mode != NONE)
@@ -90,7 +90,7 @@ if (vsyscall_mode != NONE)
                              : PAGE_KERNEL_VVAR);
 ```
 
-The `__set_fixmap` takes three arguments: The first is index of the `fixed_addresses` [enum](https://en.wikipedia.org/wiki/Enumerated_type). In our case `VSYSCALL_PAGE` is the first element of the `fixed_addresses` enum for the `x86_64` architecture:
+`__set_fixmap` 은 세 개의 매개변수를 가집니다.: 첫 번째는 `fixed_addresses` [열거형](https://en.wikipedia.org/wiki/Enumerated_type)의 인덱스입니다. 우리의 경우 `VSYSCALL_PAGE`는 `x86_64` 아키텍처에 대한 `fixed_addresses` 열거형의 첫 번째 원소입니다. :
 
 ```C
 enum fixed_addresses {
@@ -105,14 +105,14 @@ enum fixed_addresses {
 ...
 ```
 
-It equal to the `511`. The second argument is the physical address of the page that has to be mapped and the third argument is the flags of the page. Note that the flags of the `VSYSCALL_PAGE` depend on the `vsyscall_mode` variable. It will be `PAGE_KERNEL_VSYSCALL` if the `vsyscall_mode` variable is `NATIVE` and the `PAGE_KERNEL_VVAR` otherwise. Both macros (the `PAGE_KERNEL_VSYSCALL` and the `PAGE_KERNEL_VVAR`) will be expanded to the following flags:
+이는 `511`과 같습니다. 두 번째 매개변수는 매핑되어야하는 페이지의 실제 주소이고, 세 번째 매개변수는 페이지의 플래그입니다. `VSYSCALL_PAGE`의 플래그는 `vsyscall_mode` 변수에 의존합니다. `vsyscall_mode` 변수가 `NATIVE`이면 `PAGE_KERNEL_VSYSCALL`이고, 그렇지 않으면 `PAGE_KERNEL_VVAR`입니다. 두 매크로(`PAGE_KERNEL_VSYSCALL` 및`PAGE_KERNEL_VVAR`)는 다음 플래그로 확장됩니다. :
 
 ```C
 #define __PAGE_KERNEL_VSYSCALL          (__PAGE_KERNEL_RX | _PAGE_USER)
 #define __PAGE_KERNEL_VVAR              (__PAGE_KERNEL_RO | _PAGE_USER)
 ```
 
-that represent access rights to the `vsyscall` page. Both flags have the same `_PAGE_USER` flags that means that the page can be accessed by a user-mode process running at lower privilege levels. The second flag depends on the value of the `vsyscall_mode` variable. The first flag (`__PAGE_KERNEL_VSYSCALL`) will be set in the case where `vsyscall_mode` is `NATIVE`. This means virtual system calls will be native `syscall` instructions. In other way the vsyscall will have `PAGE_KERNEL_VVAR` if the `vsyscall_mode` variable will be `emulate`. In this case virtual system calls will be turned into traps and are emulated reasonably. The `vsyscall_mode` variable gets its value in the `vsyscall_setup` function:
+이 플래그는 `vsyscall` 페이지에 대한 액세스 권한을 나타냅니다. 두 플래그는 동일한 `_PAGE_USER` 플래그를 가지며 이는 더 낮은 권한 레벨에서 실행되는 사용자 모드 프로세스에 의해 페이지에 액세스 할 수 있음을 의미합니다. 두 번째 플래그는 `vsyscall_mode` 변수의 값에 따라 다릅니다. `vsyscall_mode`가 `NATIVE`인 경우 첫 번째 플래그 (`__PAGE_KERNEL_VSYSCALL`)가 설정됩니다. 즉, 가상 시스템 호출은 기본적으로 `syscall` 명령입니다. 다른 방법으로 vsyscall_mode 변수가 `emulate`이면 vsyscall은 `PAGE_KERNEL_VVAR`을 갖습니다. 이 경우 가상 시스템 호출이 트랩으로 바뀌고 합리적으로 모방됩니다. `vsyscall_mode` 변수는 `vsyscall_setup` 함수에서 값을 가져옵니다.:
 
 ```C
 static int __init vsyscall_setup(char *str)
@@ -134,22 +134,22 @@ static int __init vsyscall_setup(char *str)
 }
 ```
 
-That will be called during early kernel parameters parsing:
+이는 초기 커널 매개 변수 파싱 중에 호출됩니다. :
 
 ```C
 early_param("vsyscall", vsyscall_setup);
 ```
 
-More about `early_param` macro you can read in the sixth [part](https://0xax.gitbooks.io/linux-insides/content/Initialization/linux-initialization-6.html) of the chapter that describes process of the initialization of the Linux kernel.
+`early_param` 매크로에 대한 자세한 내용은 Linux 커널 초기화 프로세스를 설명하는 챕터의 여섯 번째 파트에서 읽을 수 있습니다.
 
-In the end of the `vsyscall_map` function we just check that virtual address of the `vsyscall` page is equal to the value of the `VSYSCALL_ADDR` with the [BUILD_BUG_ON](https://0xax.gitbooks.io/linux-insides/content/Initialization/linux-initialization-1.html) macro:
+`vsyscall_map` 함수의 끝에서 `vsyscall` 페이지의 가상 주소가 [BUILD_BUG_ON](https://junsoolee.gitbook.io/linux-insides-ko/summary/initialization/linux-initialization-6) 매크로를 사용하여 `VSYSCALL_ADDR`의 값과 같은지 확인합니다. :
 
 ```C
 BUILD_BUG_ON((unsigned long)__fix_to_virt(VSYSCALL_PAGE) !=
              (unsigned long)VSYSCALL_ADDR);
 ```
 
-That's all. `vsyscall` page is set up. The result of the all the above is the following: If we pass `vsyscall=native` parameter to the kernel command line, virtual system calls will be handled as native `syscall` instructions in the [arch/x86/entry/vsyscall/vsyscall_emu_64.S](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/arch/x86/entry/vsyscall/vsyscall_emu_64.S). The [glibc](https://en.wikipedia.org/wiki/GNU_C_Library) knows addresses of the virtual system call handlers. Note that virtual system call handlers are aligned by `1024` (or `0x400`) bytes:
+이게 전부 입니다. `vsyscall` 페이지가 설정되었습니다. 위의 모든 결과는 다음과 같습니다. `vsyscall = native` 매개 변수를 커널 명령 행에 전달하면 가상 시스템 호출은 [arch/x86/entry/vsyscall/vsyscall_emu_64.S](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/arch/x86/entry/vsyscall/vsyscall_emu_64.S)에서 기본 `syscall` 명령으로 처리됩니다. [glibc](https://en.wikipedia.org/wiki/GNU_C_Library)는 가상 시스템 호출 핸들러의 주소를 알고 있습니다. 가상 시스템 호출 핸들러는`1024`(또는 '0x400`) 바이트로 정렬됩니다. :
 
 ```assembly
 __vsyscall_page:
@@ -168,7 +168,7 @@ __vsyscall_page:
 	ret
 ```
 
-And the start address of the `vsyscall` page is the `ffffffffff600000` every time. So, the [glibc](https://en.wikipedia.org/wiki/GNU_C_Library) knows the addresses of the all virtual system call handlers. You can find definition of these addresses in the `glibc` source code:
+`vsyscall` 페이지의 시작 주소는 항상 `ffffffffff600000`입니다. 따라서 [glibc](https://en.wikipedia.org/wiki/GNU_C_Library)는 모든 가상 시스템 호출 처리기의 주소를 알고 있습니다. 이 주소들의 정의는 `glibc`소스 코드에서 찾을 수 있습니다. :
 
 ```C
 #define VSYSCALL_ADDR_vgettimeofday   0xffffffffff600000
@@ -176,11 +176,11 @@ And the start address of the `vsyscall` page is the `ffffffffff600000` every tim
 #define VSYSCALL_ADDR_vgetcpu	      0xffffffffff600800
 ```
 
-All virtual system call requests will fall into the `__vsyscall_page` + `VSYSCALL_ADDR_vsyscall_name` offset, put the number of a virtual system call to the `rax` general purpose [register](https://en.wikipedia.org/wiki/Processor_register) and the native for the x86_64 `syscall` instruction will be executed.
+모든 가상 시스템 콜 요청은 `__vsyscall_page` + `VSYSCALL_ADDR_vsyscall_name` 오프셋에 속하며, 가상 시스템 호출 수를 `rax` 범용 [레지스터]((https://en.wikipedia.org/wiki/Processor_register)에 넣고 x86_64 `syscall` 명령의 기본 명령이 실행됩니다.
 
-In the second case, if we pass `vsyscall=emulate` parameter to the kernel command line, an attempt to perform virtual system call handler will cause a [page fault](https://en.wikipedia.org/wiki/Page_fault) exception. Of course, remember, the `vsyscall` page has `__PAGE_KERNEL_VVAR` access rights that forbid execution. The `do_page_fault` function is the `#PF` or page fault handler. It tries to understand the reason of the last page fault. And one of the reason can be situation when virtual system call called and `vsyscall` mode is `emulate`. In this case `vsyscall` will be handled by the `emulate_vsyscall` function that defined in the [arch/x86/entry/vsyscall/vsyscall_64.c](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/arch/x86/entry/vsyscall/vsyscall_64.c) source code file.
+두 번째 경우, `vsyscall = emulate` 매개 변수를 커널 명령 행에 전달하면, 가상 시스템 호출 핸들러는 [page fault](https://en.wikipedia.org/wiki/Page_fault) 예외를 발생시킬 것입니다. 물론, `vsyscall` 페이지에는 실행을 금지하는 `__PAGE_KERNEL_VVAR` 액세스 권한이 있습니다. `do_page_fault` 함수는 `# PF` 또는 페이지 결함 처리기입니다. 마지막 페이지 결함의 원인을 이해하려고 시도합니다. 가상 시스템 콜이 호출되고 `vsyscall`모드가 `emulate`인 상황이 그 원인 중 하나 일 수 있습니다. 이 경우 `vsyscall`은 [arch/x86/entry/vsyscall/vsyscall_64.c](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/arch/x86/entry/vsyscall/vsyscall_64.c) 소스 코드 파일에 정의 된 `emulate_vsyscall` 함수에 의해 처리됩니다.
 
-The `emulate_vsyscall` function gets the number of a virtual system call, checks it, prints error and sends [segmentation fault](https://en.wikipedia.org/wiki/Segmentation_fault) simply:
+`emulate_vsyscall` 함수는 가상 시스템 호출의 수를 가져 와서 확인한 후, 오류를 출력하고 [세그먼트 폴트](https://en.wikipedia.org/wiki/Segmentation_fault)를 간단히 보냅니다. :
 
 ```C
 ...
@@ -199,7 +199,7 @@ sigsegv:
 	reutrn true;
 ```
 
-As it checked number of a virtual system call, it does some yet another checks like `access_ok` violations and execute system call function depends on the number of a virtual system call:
+가상 시스템 호출 수를 확인 했으므로 `access_ok` 위반과 같은 또 다른 확인을 수행하고, 가상 시스템 콜 수에 따라 다른 시스템 콜 함수를 실행합니다. :
 
 ```C
 switch (vsyscall_nr) {
@@ -214,7 +214,7 @@ switch (vsyscall_nr) {
 }
 ```
 
-In the end we put the result of the `sys_gettimeofday` or another virtual system call handler to the `ax` general purpose register, as we did it with the normal system calls and restore the [instruction pointer](https://en.wikipedia.org/wiki/Program_counter) register and add `8` bytes to the [stack pointer](https://en.wikipedia.org/wiki/Stack_register) register. This operation emulates `ret` instruction.
+결국 우리는 `sys_gettimeofday` 또는 다른 가상 시스템 호출 핸들러의 결과를 `ax` 범용 레지스터에 넣었다. 우리는 일반적인 시스템 호출로 했던 것처럼 [instruction pointer](https://en.wikipedia.org/wiki/Program_counter) 레지스터를 복원하고 `8` 바이트를 [스택 포인터](https://en.wikipedia.org/wiki/Stack_register) 레지스터에 추가한다. 이 작업은 ret 명령을 에뮬레이트합니다.
 
 ```C
 	regs->ax = ret;
@@ -225,12 +225,12 @@ do_ret:
 	return true;
 ```		
 
-That's all. Now let's look on the modern concept - `vDSO`.
+이것으로 끝입니다. 이제 현대적인 개념인 `vDSO`를 보겠습니다.
 
-Introduction to vDSO
+vDSO 소개
 --------------------------------------------------------------------------------
 
-As I already wrote above, `vsyscall` is an obsolete concept and replaced by the `vDSO` or `virtual dynamic shared object`. The main difference between the `vsyscall` and `vDSO` mechanisms is that `vDSO` maps memory pages into each process in a shared object [form](https://en.wikipedia.org/wiki/Library_%28computing%29#Shared_libraries), but `vsyscall` is static in memory and has the same address every time. For the `x86_64` architecture it is called -`linux-vdso.so.1`. All userspace applications that dynamically link to `glibc` will use the `vDSO` automatically. For example:
+위에서 이미 언급했듯, `vsyscall`은 이제 쓸모없는 개념이며 `vDSO` 또는 `virtual dynamic shared object`로 대체되었습니다. `vsyscall`과 `vDSO` 메커니즘의 주된 차이점은 `vDSO`는 메모리 페이지를 공유 객체 [form](https://en.wikipedia.org/wiki/Library_%28computing%29#Shared_libraries)의 각 프로세스에 매핑하지만, `vsyscall`은 메모리에서 정적이며 매번 같은 주소를 갖는다는 것입니다. `x86_64` 아키텍처의 경우 이름은 `linux-vdso.so.1`입니다. `glibc`에 동적으로 연결되는 모든 사용자 공간 응용 프로그램은 `vDSO`를 자동으로 사용합니다. 예를 들면 다음과 같습니다. :
 
 ```
 ~$ ldd /bin/uname
@@ -239,22 +239,22 @@ As I already wrote above, `vsyscall` is an obsolete concept and replaced by the 
 	/lib64/ld-linux-x86-64.so.2 (0x00005559aab7c000)
 ```
 
-Or:
+또는 :
 
 ```
 ~$ sudo cat /proc/1/maps | grep vdso
 7fff39f73000-7fff39f75000 r-xp 00000000 00:00 0       [vdso]
 ```
 
-Here we can see that [uname](https://en.wikipedia.org/wiki/Uname) util was linked with the three libraries:
+여기서 [uname](https://en.wikipedia.org/wiki/Uname) util이 세 개의 라이브러리와 연결되어 있음을 알 수 있습니다. :
 
 * `linux-vdso.so.1`;
 * `libc.so.6`;
 * `ld-linux-x86-64.so.2`.
 
-The first provides `vDSO` functionality, the second is `C` [standard library](https://en.wikipedia.org/wiki/C_standard_library) and the third is the program interpreter (more about this you can read in the part that describes [linkers](https://0xax.gitbooks.io/linux-insides/content/Misc/linux-misc-3.html)). So, the `vDSO` solves limitations of the `vsyscall`. Implementation of the `vDSO` is similar to `vsyscall`.
+첫 번째는 `vDSO` 기능을 제공하고, 두 번째는 `C` [표준 라이브러리](https://en.wikipedia.org/wiki/C_standard_library)이고, 세 번째는 프로그램 번역기입니다 (자세한 내용은 [링커](https://junsoolee.gitbook.io/linux-insides-ko/summary/misc/linux-misc-3)에 대해 설명하는 부분에서 읽을 수 있음). 따라서 `vDSO`는 `vsyscall`의 한계를 해결합니다. `vDSO`의 구현은 `vsyscall`과 유사합니다.
 
-Initialization of the `vDSO` occurs in the `init_vdso` function that defined in the [arch/x86/entry/vdso/vma.c](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/arch/x86/entry/vdso/vma.c) source code file. This function starts from the initialization of the `vDSO` images for 32-bits and 64-bits depends on the `CONFIG_X86_X32_ABI` kernel configuration option:
+`vDSO`의 초기화는 [arch/x86/entry/vdso/vma.c](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/arch/x86/entry/vdso/vma.c) 소스 코드 파일에 정의 된 `init_vdso` 함수에서 시작합니다. 이 함수는 32비트 와 64비트에 대한 `vDSO` 이미지의 초기화에서 시작되며 `CONFIG_X86_X32_ABI` 커널 설정 옵션에 따라 다릅니다. :
 
 ```C
 static int __init init_vdso(void)
@@ -263,12 +263,12 @@ static int __init init_vdso(void)
 
 #ifdef CONFIG_X86_X32_ABI
 	init_vdso_image(&vdso_image_x32);
-#endif	
+#endif
 ```
 
-Both functions initialize the `vdso_image` structure. This structure is defined in the two generated source code files: the [arch/x86/entry/vdso/vdso-image-64.c](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/arch/x86/entry/vdso/vdso-image-64.c) and the [arch/x86/entry/vdso/vdso-image-32.c](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/arch/x86/entry/vdso/vdso-image-32.c). These source code files generated by the [vdso2c](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/arch/x86/entry/vdso/vdso2c.c) program from the different source code files, represent different approaches to call a system call like `int 0x80`, `sysenter` and etc. The full set of the images depends on the kernel configuration.
+두 함수 모두 `vdso_image` 구조체를 초기화합니다. 이 구조체는 생성된 두 소스 코드 파일인 [arch/x86/entry/vdso/vdso-image-64.c](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/arch/x86/entry/vdso/vdso-image-64.c)와 [arch/x86/entry/vdso/vdso-image-32.c](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/arch/x86/entry/vdso/vdso-image-32.c)에 정의되어 있습니다. 다른 소스 코드 파일에서 [vdso2c](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/arch/x86/entry/vdso/vdso2c.c) 프로그램에 의해 생성 된 이러한 소스 코드 파일들은 `int 0x80`, `sysenter` 등과 같은 시스템 콜을 호출하는 다른 접근 방식을 보여줍니다. 이미지의 전체 세트는 커널 설정에 따라 다릅니다.
 
-For example for the `x86_64` Linux kernel it will contain `vdso_image_64`:
+예를 들어 `x86_64` Linux 커널의 경우 `vdso_image_64`가 포함됩니다. :
 
 ```C
 #ifdef CONFIG_X86_64
@@ -284,7 +284,7 @@ extern const struct vdso_image vdso_image_x32;
 #endif
 ```
 
-If our kernel is configured for the `x86` architecture or for the `x86_64` and compatibility mode, we will have ability to call a system call with the `int 0x80` interrupt, if compatibility mode is enabled, we will be able to call a system call with the native `syscall instruction` or `sysenter` instruction in other way:
+커널이 `x86` 아키텍처 또는  `x86_64`와 호환성 모드로 설정된 경우 `int 0x80` 인터럽트로 시스템 콜을 호출 할 수 있습니다. 호환성 모드가 활성화 된 경우에는 다른 방식으로 기본 `syscall instruction` 또는 `sysenter` 명령으로 시스템 콜을 호출 할 수 있습니다. :
 
 ```C
 #if defined CONFIG_X86_32 || defined CONFIG_COMPAT
@@ -296,7 +296,7 @@ If our kernel is configured for the `x86` architecture or for the `x86_64` and c
 #endif
 ```
 
-As we can understand from the name of the `vdso_image` structure, it represents image of the `vDSO` for the certain mode of the system call entry. This structure contains information about size in bytes of the `vDSO` area that always a multiple of `PAGE_SIZE` (`4096` bytes), pointer to the text mapping, start and end address of the `alternatives` (set of instructions with better alternatives for the certain type of the processor) and etc. For example `vdso_image_64` looks like this:
+`vdso_image` 구조체의 이름에서 알 수 있듯이 시스템 콜 엔트리의 특정 모드에 대한 `vDSO` 이미지를 나타냅니다. 이 구조체는 항상 `PAGE_SIZE` (`4096` 바이트)의 배수인 `vDSO` 영역의 바이트 사이즈에 대한 정보, 텍스트 매핑에 대한 포인터, `alternatives`(특정한 타입의 프로세스를 위한 더 나은 대안의 명령어 세트)의 시작과 끝 주소 등을 포함합니다. 예를 들어 `vdso_image_64` 는 다음과 같습니다. :
 
 ```C
 const struct vdso_image vdso_image_64 = {
@@ -314,15 +314,15 @@ const struct vdso_image vdso_image_64 = {
 };
 ```
 
+`raw_data`는 8 Kilobytes 크기 또는 `2` 페이지 크기인 64 비트 `vDSO` 시스템 호출의 raw 이진 코드를 포함하거나 :
 Where the `raw_data` contains raw binary code of the 64-bit `vDSO` system calls which are `2` page size:
 
 ```C
 static struct page *pages[2];
 ```
 
-or 8 Kilobytes.
+`init_vdso_image` 함수는 동일한 소스 코드 파일에 정의되어 있으며 `vdso_image.text_mapping.pages` 만 초기화합니다. 우선 이 함수는 페이지 수를 계산하고 주어진 주소를 `page` 구조체로 변환하는 `virt_to_page` 매크로로 각 `vdso_image.text_mapping.pages [number_of_page]`를 초기화합니다.
 
-The `init_vdso_image` function is defined in the same source code file and just initializes the `vdso_image.text_mapping.pages`. First of all this function calculates the number of pages and initializes each `vdso_image.text_mapping.pages[number_of_page]` with the `virt_to_page` macro that converts given address to the `page` structure:
 
 ```C
 void __init init_vdso_image(const struct vdso_image *image)
@@ -339,13 +339,13 @@ void __init init_vdso_image(const struct vdso_image *image)
 }
 ```
 
-The `init_vdso` function passed to the `subsys_initcall` macro adds the given function to the `initcalls` list. All functions from this list will be called in the `do_initcalls` function from the [init/main.c](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/init/main.c) source code file:
+`subsys_initcall` 매크로에 전달 된 `init_vdso` 함수는 주어진 함수를 `initcalls` 목록에 추가합니다. 이 목록의 모든 함수는 [init/main.c](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/init/main.c) 소스 코드 파일의 `do_initcalls` 함수에서 호출됩니다. :
 
 ```C
 subsys_initcall(init_vdso);
 ```
 
-Ok, we just saw initialization of the `vDSO` and initialization of `page` structures that are related to the memory pages that contain `vDSO` system calls. But to where do their pages map? Actually they are mapped by the kernel, when it loads binary to the memory. The Linux kernel calls the `arch_setup_additional_pages` function from the [arch/x86/entry/vdso/vma.c](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/arch/x86/entry/vdso/vma.c) source code file that checks that `vDSO` enabled for the `x86_64` and calls the `map_vdso` function:
+자, 우리는 `vDSO`의 초기화와 `vDSO` 시스템 호출을 포함하는 메모리 페이지와 관련된 `page` 구조체의 초기화를 보았습니다. 그렇다면 이들의 페이지는 어디로 매핑될까요? 실제로 바이너리를 메모리에 로드할 때 커널에 의해 매핑됩니다. 리눅스 커널은 [arch/x86/entry/vdso/vma.c](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/arch/x86/entry/vdso/vma.c) 소스 코드 파일에서 `arch_setup_additional_pages` 함수를 호출하여 `x86_64`에 대해 `vDSO`가 활성화되어 있는지 확인하고 `map_vdso` 함수를 호출합니다. :
 
 ```C
 int arch_setup_additional_pages(struct linux_binprm *bprm, int uses_interp)
@@ -357,7 +357,7 @@ int arch_setup_additional_pages(struct linux_binprm *bprm, int uses_interp)
 }
 ```
 
-The `map_vdso` function is defined in the same source code file and maps pages for the `vDSO` and for the shared `vDSO` variables. That's all. The main differences between the `vsyscall` and the `vDSO` concepts is that `vsyscall` has a static address of `ffffffffff600000` and implements `3` system calls, whereas the `vDSO` loads dynamically and implements four system calls:
+`map_vdso` 함수는 동일한 소스 코드 파일에서 정의되며 `vDSO`와 공유 `vDSO` 변수에 대한 페이지를 매핑합니다. 이것으로 끝입니다. `vsyscall`과 `vDSO` 개념의 주요 차이점은 `vsyscall`은 고정 주소 `ffffffffff600000`을 가지며 `3` 시스템 콜을 구현하는 반면,`vDSO`는 동적으로 로드되고 4 개의 시스템 콜을 구현한다는 것입니다. :
 
 * `__vdso_clock_gettime`;
 * `__vdso_getcpu`;
@@ -365,20 +365,20 @@ The `map_vdso` function is defined in the same source code file and maps pages f
 * `__vdso_time`.
 
 
-That's all.
+끝났습니다.
 
-Conclusion
+결론
 --------------------------------------------------------------------------------
 
-This is the end of the third part about the system calls concept in the Linux kernel. In the previous [part](https://0xax.gitbooks.io/linux-insides/content/SysCall/linux-syscall-2.html) we discussed the implementation of the preparation from the Linux kernel side, before a system call will be handled and implementation of the `exit` process from a system call handler. In this part we continued to dive into the stuff which is related to the system call concept and learned two new concepts that are very similar to the system call - the `vsyscall` and the `vDSO`.
+이것으로 리눅스 커널의 시스템 호출 개념에 대한 세 번째 파트의 끝이 났습니다. 이전의 [파트](https://junsoolee.gitbook.io/linux-insides-ko/summary/syscall/linux-syscall-2)에서 시스템 호출 전에 Linux 커널에서의 준비 구현과, 시스템 콜 핸들러에서의 `exit` 프로세스의 구현에 대해 논의했습니다. 이 파트에서 우리는 계속해서 시스템 콜 개념과 관련된 내용을 살펴보고 시스템 콜과 매우 유사한 두 가지 새로운 개념인 `vsyscall` 과 `vDSO`를 배웠습니다.
 
-After all of these three parts, we know almost all things that are related to system calls, we know what system call is and why user applications need them.  We also know what occurs when a user application calls a system call and how the kernel handles system calls.
+이 세 파트을 모두 진행한 후에는 시스템 콜과 관련된 거의 모든 사항을 알고 시스템 콜이 무엇이며 사용자 응용 프로그램에 필요한 이유를 알고 있습니다. 또한 사용자 응용 프로그램이 시스템 콜을 호출 할 때 발생하는 일과 커널이 시스템 콜을 처리하는 방법도 알고 있습니다.
 
-The next part will be the last part in this [chapter](https://0xax.gitbooks.io/linux-insides/content/SysCall/index.html) and we will see what occurs when a user runs the program.
+다음 파트는 이 [챕터](https://junsoolee.gitbook.io/linux-insides-ko/summary/syscall)의 마지막 파트이며 사용자가 프로그램을 실행할 때 어떤 일이 발생하는지 볼 수 있습니다.
 
-If you have questions or suggestions, feel free to ping me in twitter [0xAX](https://twitter.com/0xAX), drop me [email](anotherworldofworld@gmail.com) or just create [issue](https://github.com/0xAX/linux-insides/issues/new).
+질문이나 제안 사항이 있으면 [twitter](https://twitter.com/0xAX)에 의견이나 핑을 남겨주시거나. [email](anotherworldofworld@gmail.com) 보내주시거나, [issue](https://github.com/0xAX/linux-insides/issues/new)를 만들어주세요.
 
-**Please note that English is not my first language and I am really sorry for any inconvenience. If you found any mistakes please send me PR to [linux-insides](https://github.com/0xAX/linux-insides).**
+**영어는 제 모국어가 아닙니다. 그리고 여타 불편하셨던 점에 대해서 정말로 사과드립니다. 만약 실수를 찾아내셨다면 부디 [linux-insides 원본](https://github.com/0xAX/linux-internals)으로, 번역에 대해서는 [linux-insides 한글 번역](https://github.com/junsooo/linux-insides-ko)으로 PR을 보내주세요.**
 
 Links
 --------------------------------------------------------------------------------

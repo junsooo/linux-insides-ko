@@ -6,10 +6,10 @@ Kernel decompression
 
 이것은 `커널 부팅 프로세스` 시리즈의 다섯 번 째 파트입니다. 우리는 이전 [파트](https://github.com/0xAX/linux-insides/blob/v4.16/Bootinglinux-bootstrap-4.md#transition-to-the-long-mode)에서 64비트 모드로 전환하는 것을 보았고 이 시점에서 계속 진행 할 것입니다. 우리는 커널 압축 해제, 재배치 및 직접 커널 압축 해제에 대한 준비로 커널 코드로 도약하기 전에 마지막 단계를 보게 될 것입니다. 다시 커널 코드를 살펴봅시다.
 
-커널 디컴프레션 전 준비해야할 사항
+커널 압축 해제 전 준비해야할 사항
 --------------------------------------------------------------------------------
 
-우리는 `64-bit` 엔트리 포인트에서 점프하기 직전에 멈췄습니다. `startup_64` [arch/x86/boot/compressed/head_64.S](https://github.com/torvalds/linux/blob/v4.16/arch/x86/boot/compressed/head_64.S) 소스 코드 파일에 위치한. 우리는 이미 `startup_32`에서 `startup_64`로 점프하는 것을 보았습니다.
+우리는 `64-bit` 엔트리 포인트인 `startup_64`에서 점프하기 직전에 멈췄습니다. 이것은 소스코드 파일 [arch/x86/boot/compressed/head_64.S](https://github.com/torvalds/linux/blob/v4.16/arch/x86/boot/compressed/head_64.S)에 있습니다.  `startup_32`에서 `startup_64`로 점프하는 것은 이미 보았습니다.
 
 ```assembly
 	pushl	$__KERNEL_CS
@@ -75,9 +75,9 @@ ENTRY(startup_64)
     popfq
 ```
 
-`lgdt gdt64(%rip)` 명령 후 리눅스 커널 소스 코드를 보면, 추가 코드가 있음을 알 수 있습니다. 이 코드는 필요한 경우[5-level pagging](https://lwn.net/Articles/708526/)을 성화 하기 위해 트럼팰린을 빌드합니다. 이 책에서는 4단계 페이징만 고려하므로 이 코드는 생략합니다.
+`lgdt gdt64(%rip)` 명령 후 리눅스 커널 소스 코드를 보면, 추가 코드가 있음을 알 수 있습니다. 이 코드는 필요한 경우[5레벨 페이징](https://lwn.net/Articles/708526/)을 활성화 하기 위해 트럼팰린을 빌드합니다. 이 책에서는 4단계 페이징만 고려하므로 이 코드는 생략합니다.
 
-위에서 본 것 처럼, `rbx` 레지스터는 커널 디컴프레서 코드의 시작 주소를 포함하고 우리는 이 주소를 `boot_stack_end` 오프셋을 스택 상단에 대한 포인터를 나타내는 `rsp` 레지스터에 넣습니다. 이 단계가 끝나면 스택은 정확할 것입니다.  You can find definition of the `boot_stack_end` in the end of [arch/x86/boot/compressed/head_64.S](https://github.com/torvalds/linux/blob/v4.16/arch/x86/boot/compressed/head_64.S) 어셈블리 소스 파일:
+위에서 본 것 처럼, `rbx` 레지스터는 커널 디컴프레서 코드의 시작 주소를 포함하고 우리는 이 주소를와 `boot_stack_end` 오프셋을 스택 상단에 대한 포인터를 나타내는 `rsp` 레지스터에 넣습니다. 이 단계가 끝나면 스택은 정확할 것입니다.  You can find definition of the `boot_stack_end` in the end of [arch/x86/boot/compressed/head_64.S](https://github.com/torvalds/linux/blob/v4.16/arch/x86/boot/compressed/head_64.S) 어셈블리 소스 파일:
 
 ```assembly
 	.bss
@@ -91,7 +91,7 @@ boot_stack_end:
 
 그것은 `.pgtable` 바로 앞에 있는 `.bss` 섹션 끝에 있습니다.[arch/x86/boot/compressed/vmlinux.lds.S](https://github.com/torvalds/linux/blob/v4.16/arch/x86/boot/compressed/vmlinux.lds.S)를 살펴 보면, 링커 스크립트에는 `.bss` 및 `.pgtable`의 정의가 있습니다.
 
-스택을 설정하면 디컴프레션된 커널의 재배치 주소를 계산할 때 디컴프레션된 커널을 위에서 얻은 주소로 복사할 수 있습니다. 세부 사항을 작성하기 전에, 아래의 어셈블리 코드를 살펴 보겠습니다.
+스택을 설정하면 압축해제된 커널의 재배치 주소를 계산할 때 디컴프레션된 커널을 위에서 얻은 주소로 복사할 수 있습니다. 세부 사항을 살펴보기 전에, 아래의 어셈블리 코드를 살펴 보겠습니다.
 
 ```assembly
 	pushq	%rsi
@@ -193,7 +193,7 @@ relocated:
 	popq	%rsi
 ```
 
-다시 우리는 `rdi`를 `boot_params` 구조의 포인터로 설정하고 스택에 보존합니다. 동시에 커널 디컴프레션에 사용될 영역을 가리키도록 `rsi`를 설정했습니다. 마지막 단계는 `extract_kernel` 매개 변수를 준비하고 커널을 분해하는 이 함수를 호출하는 것입니다. `extract_kernel` 함수는 [arch / x86 / boot / compressed / misc.](https://github.com/torvalds/linux/blob/v4.16/arch/x86/boot/compressed/misc)에 정의되어 있습니다. .c) 소스 코드 파일이며 6 개의 인수를 사용합니다.
+다시 우리는 `rdi`를 `boot_params` 구조의 포인터로 설정하고 스택에 보존합니다. 동시에 커널 디컴프레션에 사용될 영역을 가리키도록 `rsi`를 설정했습니다. 마지막 단계는 `extract_kernel` 매개 변수를 준비하고 커널을 분해하는 이 함수를 호출하는 것입니다. `extract_kernel` 함수는 [arch/x86/boot/compressed/misc.c](https://github.com/torvalds/linux/blob/v4.16/arch/x86/boot/compressed/misc.c)에 정의되어 있습니다. ) 소스 코드 파일이며 6 개의 인수를 사용합니다.
 
 * `rmode` - 초기 커널 초기화중 또는 부트로더로 채워진 채워진 [boot_params](https://github.com/torvalds/linux/blob/v4.16/arch/x86/include/uapi/asm/bootparam.h) 포인터
 * `heap` - 초기 부팅 힙의 시작 주소를 나타내는 `boot_heap`의 포인터;
@@ -202,12 +202,12 @@ relocated:
 * `output` - 향후 압축 해제 된 커널의 시작 주소;
 * `output_len` - 압축 해제 된 커널의 크기;
 
-모든 인수는 [System V Application Binary Interface](http://www.x86-64.org/documentation/abi.pdf)에 따라 레지스를 통해 전달됩니다. 모든 준비를 마쳤으며 이제 커널 압축 해제를 볼 수 있습니다.
+모든 인수는 [System V Application Binary Interface](http://www.x86-64.org/documentation/abi.pdf)에 따라 레지스터를 통해 전달됩니다. 모든 준비를 마쳤으며 이제 커널 압축 해제를 볼 수 있습니다.
 
 커널 압축 해제
 --------------------------------------------------------------------------------
 
-이전 단락에서 보았듯이 `extract_kernel` 함수는[arch/x86/boot/compressed/misc.c](https://github.com/torvalds/linux/blob/v4.16/arch/x86/boot/compressed/misc.c) 에 정의되어 있습니다. 소스코드 이며 6개의 인수를 갖습니다.이 함수는 이전 부분에서 이미 본 비디오 / 콘솔 초기화로 시작합니다. [real mode](https://en.wikipedia.org/wiki/Real_mode)에서 시작했는지 혹은 부트로더가 사용되었는지, 혹은 32비트 부트로더가 사용되었는지 64비트 부트로더가 사용되었는지를 알 수 없기 때문에 이 작업을 다시 수행해야 합니다.
+이전 단락에서 보았듯이 `extract_kernel` 함수는[arch/x86/boot/compressed/misc.c](https://github.com/torvalds/linux/blob/v4.16/arch/x86/boot/compressed/misc.c)소스코드에 정의되어 있으며 6개의 인수를 갖습니다. 이 함수는 이전 부분에서 이미 본 비디오 / 콘솔 초기화로 시작합니다. [real mode](https://en.wikipedia.org/wiki/Real_mode)에서 시작했는지 혹은 부트로더가 사용되었는지, 혹은 32비트 부트로더가 사용되었는지 64비트 부트로더가 사용되었는지를 알 수 없기 때문에 이 작업을 다시 수행해야 합니다.
 
 첫 번째 초기화 단계 후에 사용 가능한 메모리의 시작과 끝에 대한 포인터를 저장합니다.
 
@@ -298,7 +298,7 @@ __decompress(input_data, input_len, NULL, NULL, output, output_len, NULL, error)
 #endif
 ```
 
-커널이 찹축 해제 된 후 마지막 두 함수는 `parse_elf` 와 `handle_relocations` 입니다. 이 기능의 핵심은 압축되지 않은 커널 이미지를 올바른 메모리 위치로 옮기는 것입니다. 실제 압축 해제는 [in-place](https://en.wikipedia.org/wiki/In-place_algorithm)의 압축을 풀고 커널을 올바른 주소로 이동해야 합니다. 이미 알고 있듯이, 커널 이미지는 [ELF](https://en.wikipedia.org/wiki/Executable_and_Linkable_Format) 실행 파일이므로 `parse_elf` 함수의 주요 목표는 로드 가능한 세그먼트를 올바른 주소로 이동하는 것입니다. `readelf` 프로그램의 출력에서도 로드가능한 세그먼트를 볼 수 있습니다. 
+커널이 압축 해제 된 후 마지막 두 함수는 `parse_elf` 와 `handle_relocations` 입니다. 이 함수들의 핵심은 압축되지 않은 커널 이미지를 올바른 메모리 위치로 옮기는 것입니다. 실제 압축 해제는 [in-place](https://en.wikipedia.org/wiki/In-place_algorithm)의 압축을 풀고 커널을 올바른 주소로 이동해야 합니다. 이미 알고 있듯이, 커널 이미지는 [ELF](https://en.wikipedia.org/wiki/Executable_and_Linkable_Format) 실행 파일이므로 `parse_elf` 함수의 주요 목표는 로드 가능한 세그먼트를 올바른 주소로 이동하는 것입니다. `readelf` 프로그램의 출력에서도 로드가능한 세그먼트를 볼 수 있습니다. 
 
 ```
 readelf -l vmlinux

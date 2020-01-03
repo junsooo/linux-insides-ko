@@ -1,30 +1,30 @@
-Interrupts and Interrupt Handling. Part 10.
+인터럽트 및 인터럽트 처리. Part 10.
 ================================================================================
 
-Last part
+마지막 파트
 -------------------------------------------------------------------------------
 
-This is the tenth part of the [chapter](https://0xax.gitbooks.io/linux-insides/content/Interrupts/index.html) about interrupts and interrupt handling in the Linux kernel and in the previous [part](https://0xax.gitbooks.io/linux-insides/content/Interrupts/linux-interrupts-9.html) we saw a little about deferred interrupts and related concepts like `softirq`, `tasklet` and `workqeue`. In this part we will continue to dive into this theme and now it's time to look at real hardware driver.
+이것은 리눅스 커널에서 인터럽트 처리를 다루는 세 번째 파트입니다 [chapter](https://0xax.gitbooks.io/linux-insides/content/Interrupts/index.html)  그리고 이전 [파트](https://0xax.gitbooks.io/linux-insides/content/Interrupts/linux-interrupts-9.html)에서 우리는 지연된 인터럽트와 `softirq`, `tasklet` 및 `workqeue`와 같은 관련 개념에 대해 조금 보았습니다. 이 부분에서 우리는이 주제를 계속해서 살펴볼 것이며 이제 실제 하드웨어 드라이버를 살펴볼 차례입니다.
 
-Let's consider serial driver of the [StrongARM** SA-110/21285 Evaluation Board](http://netwinder.osuosl.org/pub/netwinder/docs/intel/datashts/27813501.pdf) board for example and will look how this driver requests an [IRQ](https://en.wikipedia.org/wiki/Interrupt_request_%28PC_architecture%29) line, 
-what happens when an interrupt is triggered and etc. The source code of this driver is placed in the [drivers/tty/serial/21285.c](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/drivers/tty/serial/21285.c) source code file. Ok, we have source code, let's start.
+예를 들어 [StrongARM ** SA-110 / 21285 Evaluation Board](http://netwinder.osuosl.org/pub/netwinder/docs/intel/datashts/27813501.pdf) 보드의 직렬 드라이버를 고려해 보자. 이 드라이버는 [IRQ](https://en.wikipedia.org/wiki/Interrupt_request_%28PC_architecture%29) 줄을 요청합니다.
+이 트리거의 소스 코드는 [drivers / tty / serial / 21285.c](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/drivers/tty/serial/21285.c)에 있습니다. 소스코드를 갖고 있으므로, 시작합시다!
 
-Initialization of a kernel module
+커널 모듈의 초기화
 --------------------------------------------------------------------------------
 
-We will start to consider this driver as we usually did it with all new concepts that we saw in this book. We will start to consider it from the intialization. As you already may know, the Linux kernel provides two macros for initialization and finalization of a driver or a kernel module:
+우리는 이 책에서 보았던 모든 새로운 개념으로 보통이 드라이버를 고려했을 것입니다. 우리는 그것을 초기화에서 고려하기 시작할 것입니다. 이미 알고 있듯이 Linux 커널은 드라이버 또는 커널 모듈의 초기화 및 마무리를 위한 두 가지 매크로를 제공합니다.
 
 * `module_init`;
 * `module_exit`.
 
-And we can find usage of these macros in our driver source code:
+드라이버 소스 코드에서 이러한 매크로의 사용법을 찾을 수 있습니다.
 
 ```C
 module_init(serial21285_init);
 module_exit(serial21285_exit);
 ```
 
-The most part of device drivers can be compiled as a loadable kernel [module](https://en.wikipedia.org/wiki/Loadable_kernel_module) or in another way they can be statically linked into the Linux kernel. In the first case initialization of a device driver will be produced via the `module_init` and `module_exit` macros that are defined in the [include/linux/init.h](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/include/linux/init.h):
+장치 드라이버의 대부분은로드 가능한 커널 [module](https://en.wikipedia.org/wiki/Loadable_kernel_module) 또는 다른 방법으로 Linux 커널에 정적으로 링크 될 수 있습니다. 첫 번째 경우 장치 드라이버의 초기화는 [include / linux / init.h](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/include/linux/init.h)에 정의 된`module_init` 및`module_exit` 매크로를 통해 생성됩니다.  :
 
 ```C
 #define module_init(initfn)                                     \
@@ -38,7 +38,8 @@ The most part of device drivers can be compiled as a loadable kernel [module](ht
         void cleanup_module(void) __attribute__((alias(#exitfn)));
 ```
 
-and will be called by the [initcall](http://kernelnewbies.org/Documents/InitcallMechanism) functions:
+[initcall](http://kernelnewbies.org/Documents/InitcallMechanism) 함수에 의해 호출됩니다.
+:
 
 * `early_initcall`
 * `pure_initcall`
@@ -51,14 +52,13 @@ and will be called by the [initcall](http://kernelnewbies.org/Documents/Initcall
 * `device_initcall`
 * `late_initcall`
 
-that are called in the `do_initcalls` from the [init/main.c](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/init/main.c). Otherwise, if a device driver is statically linked into the Linux kernel, implementation of these macros will be following:
-
+[init / main.c](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/init/main.c)의 `do_initcalls`에서 호출됩니다. 그렇지 않으면 장치 드라이버가 Linux 커널에 정적으로 링크 된 경우 이러한 매크로의 구현은 다음과 같습니다.
 ```C
 #define module_init(x)  __initcall(x);
 #define module_exit(x)  __exitcall(x);
 ```
 
-In this way implementation of module loading placed in the [kernel/module.c](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/kernel/module.c) source code file and initialization occurs in the `do_init_module` function. We will not dive into details about loadable modules in this chapter, but will see it in the special chapter that will describe Linux kernel modules. Ok, the `module_init` macro takes one parameter - the `serial21285_init` in our case. As we can understand from function's name, this function does stuff related to the driver initialization. Let's look at it:
+이런 식으로 [kernel / module.c](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/kernel/module.c) 소스 코드 파일에 배치 된 모듈 로딩 구현은`do_init_module` 함수에서 초기화됩니다. 이 장에서는 로드 가능한 모듈에 대해 자세히 다루지 않지만 Linux 커널 모듈을 설명하는 특별 장에서 볼 수 있습니다. 자, `module_init` 매크로는 하나의 매개 변수-우리의 경우 `serial21285_init`를 사용합니다. 함수 이름에서 알 수 있듯이이 함수는 드라이버 초기화와 관련된 작업을 수행합니다. 봅시다:
 
 ```C
 static int __init serial21285_init(void)
@@ -77,8 +77,7 @@ static int __init serial21285_init(void)
 }
 ```
 
-As we can see, first of all it prints information about the driver to the kernel buffer and the call of the `serial21285_setup_ports` function. This function setups the base [uart](https://en.wikipedia.org/wiki/Universal_asynchronous_receiver/transmitter) clock of the `serial21285_port` device:
-
+보다시피, 먼저 드라이버에 대한 정보를 커널 버퍼에 출력하고 `serial21285_setup_ports` 함수를 호출합니다. 이 함수는 `serial21285_port`장치의 기본 [uart](https://en.wikipedia.org/wiki/Universal_asynchronous_receiver/transmitter) 클락을 설정합니다.
 ```C
 unsigned int mem_fclk_21285 = 50000000;
 
@@ -88,7 +87,7 @@ static void serial21285_setup_ports(void)
 }
 ```
 
-Here the `serial21285` is the structure that describes `uart` driver:
+`serial21285`는 `uart` 드라이버를 설명하는 구조체입니다 :
 
 ```C
 static struct uart_driver serial21285_reg = {
@@ -102,7 +101,7 @@ static struct uart_driver serial21285_reg = {
 };
 ```
 
-If the driver registered successfully we attach the driver-defined port `serial21285_port` structure with the `uart_add_one_port` function from the [drivers/tty/serial/serial_core.c](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/drivers/tty/serial/serial_core.c) source code file and return from the `serial21285_init` function:
+드라이버가 성공적으로 등록되면 [drivers/tty/serial/serial_core.c](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/drivers/tty/serial/serial_core.c)의 `uart_add_one_port` 함수로 드라이버 정의 포트 `serial21285_port` 구조체를 연결합니다  소스 코드 파일이며 `serial21285_init` 함수에서 반환됩니다.
 
 ```C
 if (ret == 0)
@@ -111,7 +110,8 @@ if (ret == 0)
 return ret;
 ```
 
-That's all. Our driver is initialized. When an `uart` port will be opened with the call of the `uart_open` function from the [drivers/tty/serial/serial_core.c](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/drivers/tty/serial/serial_core.c), it will call the `uart_startup` function to start up the serial port. This function will call the `startup` function that is part of the `uart_ops` structure. Each `uart` driver has the definition of this structure, in our case it is:
+그게 전부입니다. 드라이버가 초기화되었습니다. [drivers/tty/serial/serial_core.c](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/drivers/tty/serial/serial_core.c)에서 `uart_open` 함수를 호출하여 `uart` 포트를 열 때 , `uart_startup` 함수를 호출하여 직렬 포트를 시작합니다. 이 함수는 `uart_ops` 구조의 일부인 `startup` 함수를 호출합니다. 각 `uart` 드라이버는 이 구조체에 대한 정의를 가지고 있습니다.
+
 
 ```C
 static struct uart_ops serial21285_ops = {
@@ -121,12 +121,12 @@ static struct uart_ops serial21285_ops = {
 }
 ```
 
-`serial21285` structure. As we can see the `.strartup` field references on the `serial21285_startup` function. Implementation of this function is very interesting for us, because it is related to the interrupts and interrupt handling.
+`serial21285` 구조. 보시다시피`serial21285_startup` 함수에서`.strartup` 필드 참조를 볼 수 있습니다. 이 함수의 구현은 인터럽트 및 인터럽트 처리와 관련되어 있기 때문에 매우 흥미 롭습니다.
 
-Requesting irq line
+irq 라인 요청
 --------------------------------------------------------------------------------
 
-Let's look at the implementation of the `serial21285` function:
+`serial21285` 함수의 구현을 살펴 봅시다.
 
 ```C
 static int serial21285_startup(struct uart_port *port)
@@ -149,7 +149,7 @@ static int serial21285_startup(struct uart_port *port)
 }
 ```
 
-First of all about `TX` and `RX`. A serial bus of a device consists of just two wires: one for sending data and another for receiving. As such, serial devices should have two serial pins: the receiver - `RX`, and the transmitter - `TX`. With the call of first two macros: `tx_enabled` and `rx_enabled`, we enable these wires. The following part of these function is the greatest interest for us. Note on `request_irq` functions. This function registers an interrupt handler and enables a given interrupt line. Let's look at the implementation of this function and get into the details. This function defined in the [include/linux/interrupt.h](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/include/linux/interrupt.h) header file and looks as:
+우선`TX`와 `RX`에 대해. 장치의 직렬 버스는 두 개의 전선으로 구성됩니다. 하나는 데이터 전송 용이고 다른 하나는 수 신용입니다. 따라서 직렬 장치에는 두 개의 직렬 핀, 즉 수신기- `RX` 및 송신기-`TX`가 있어야합니다. 첫 번째 두 매크로 인 tx_enabled와 rx_enabled를 호출하여이 와이어를 활성화합니다. 이 기능의 다음 부분은 우리에게 가장 큰 관심사입니다. `request_irq` 함수에 주의하십시오. 이 함수는 인터럽트 핸들러를 등록하고 지정된 인터럽트 라인을 활성화합니다. 이 함수의 구현을 살펴보고 세부 사항을 살펴 보겠습니다. 이 함수는 [include/linux/interrupt.h](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/include/linux/interrupt.h) 헤더 파일에 정의되어 있으며 다음과 같습니다.
 
 ```C
 static inline int __must_check
@@ -160,16 +160,15 @@ request_irq(unsigned int irq, irq_handler_t handler, unsigned long flags,
 }
 ```
 
-As we can see, the `request_irq` function takes five parameters:
+보시다시피`request_irq` 함수는 5 개의 매개 변수를 취합니다 :
 
-* `irq` - the interrupt number that being requested;
-* `handler` - the pointer to the interrupt handler;
-* `flags` - the bitmask options;
-* `name` - the name of the owner of an interrupt;
-* `dev` - the pointer used for shared interrupt lines;
+* `irq`-요청 된 인터럽트 번호;
+* `handler`-인터럽트 핸들러에 대한 포인터;
+* `flags`-비트 마스크 옵션;
+* `name`-인터럽트 소유자의 이름.
+* `dev`-공유 인터럽트 라인에 사용되는 포인터.
 
-Now let's look at the calls of the `request_irq` functions in our example. As we can see the first parameter is `IRQ_CONRX`. We know that it is number of the interrupt, but what is it `CONRX`? This macro defined in the [arch/arm/mach-footbridge/include/mach/irqs.h](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/arch/arm/mach-footbridge/include/mach/irqs.h) header file. We can find the full list of interrupts that the `21285` board can generate. Note that in the second call of the `request_irq` function we pass the `IRQ_CONTX` interrupt number. Both these interrupts will handle `RX` and `TX` event in our driver. Implementation of these macros is easy:
-
+이제 우리 예제에서`request_irq` 함수의 호출을 봅시다. 보시다시피 첫 번째 매개 변수는`IRQ_CONRX`입니다. 우리는 그것이 인터럽트의 수라는 것을 알고 있습니다. 그러나  무엇이 `CONRX`일까요? [arch/ arm / mach-footbridge / include / mach / irqs.h](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d93/arch/arm/mach-footbridge/include/mach/irqs.h) 헤더 파일에 정의 된이 매크로  `21285` 보드가 생성 할 수있는 전체 인터럽트 목록을 찾을 수 있습니다. `request_irq` 함수의 두 번째 호출에서 우리는`IRQ_CONTX` 인터럽트 번호를 전달합니다. 이 두 인터럽트는 드라이버에서`RX` 및`TX` 이벤트를 처리합니다. 이 매크로의 구현은 쉽습니다.
 ```C
 #define IRQ_CONRX               _DC21285_IRQ(0)
 #define IRQ_CONTX               _DC21285_IRQ(1)
@@ -179,22 +178,23 @@ Now let's look at the calls of the `request_irq` functions in our example. As we
 #define _DC21285_IRQ(x)         (16 + (x))
 ```
 
-The [ISA](https://en.wikipedia.org/wiki/Industry_Standard_Architecture) IRQs on this board are from `0` to `15`, so, our interrupts will have first two numbers: `16` and `17`. Second parameters for two calls of the `request_irq` functions are `serial21285_rx_chars` and `serial21285_tx_chars`. These functions will be called when an `RX` or `TX` interrupt occurred. We will not dive in this part into details of these functions, because this chapter covers the interrupts and interrupts handling but not device and drivers. The next parameter - `flags` and as we can see, it is zero in both calls of the `request_irq` function. All acceptable flags are defined as `IRQF_*` macros in the [include/linux/interrupt.h](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/include/linux/interrupt.h). Some of it:
+이 보드의 [ISA] https://en.wikipedia.org/wiki/Industry_Standard_Architecture) IRQ는 `0`에서 `15`이므로 인터럽트는 `16`과 `17`의 첫 두 숫자를 갖습니다. `request_irq` 함수의 두 호출에 대한 두 번째 매개 변수는 `serial21285_rx_chars` 및 `serial21285_tx_chars`입니다. 이 함수들은 RX 또는 TX 인터럽트가 발생했을 때 호출됩니다. 이 장에서는 인터럽트와 인터럽트 처리를 다루지만 장치와 드라이버는 다루지 않기 때문에이 기능에 대한 자세한 내용은 다루지 않겠습니다. 다음 매개 변수 인`flags` 와 보시다시피 `request_irq` 함수의 두 호출에서 모두 0입니다. 허용되는 모든 플래그는 [include/linux/interrupt.h](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/include/linux/interrupt.h)에서`IRQF_ *`매크로로 정의됩니다 . 그 중 일부:
 
-* `IRQF_SHARED` - allows sharing the irq among several devices;
-* `IRQF_PERCPU` - an interrupt is per cpu;
-* `IRQF_NO_THREAD` - an interrupt cannot be threaded;
-* `IRQF_NOBALANCING` - excludes this interrupt from irq balancing;
-* `IRQF_IRQPOLL` - an interrupt is used for polling;
-* and etc.
+* `IRQF_SHARED`-여러 장치간에 irq를 공유 할 수 있습니다.
+* `IRQF_PERCPU`-인터럽트는 CPU 당입니다.
+* `IRQF_NO_THREAD`-인터럽트를 스레드 할 수 없습니다.
+* `IRQF_NOBALANCING`-irq 밸런싱에서이 인터럽트를 제외합니다.
+* `IRQF_IRQPOLL`-폴링에 인터럽트가 사용됩니다.
+* 등
 
-In our case we pass `0`, so it will be `IRQF_TRIGGER_NONE`. This flag means that it does not imply any kind of edge or level triggered interrupt behaviour. To the fourth parameter (`name`), we pass the `serial21285_name` that defined as:
+우리의 경우 `0`을 전달하므로 `IRQF_TRIGGER_NONE`이됩니다. 이 플래그는 모든 종류의 엣지 또는 레벨 트리거 인터럽트 동작을 의미하지 않습니다. 네 번째 매개 변수 (`name`)에 다음과 같이 정의 된 `serial21285_name`을 전달합니다.
+
 
 ```C
 static const char serial21285_name[] = "Footbridge UART";
 ```
 
-and will be displayed in the output of the `/proc/interrupts`. And in the last parameter we pass the pointer to the our main `uart_port` structure. Now we know a little about `request_irq` function and its parameters, let's look at its implemenetation. As we can see above, the `request_irq` function just makes a call of the `request_threaded_irq` function inside. The `request_threaded_irq` function defined in the [kernel/irq/manage.c](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/kernel/irq/manage.c) source code file and allocates a given interrupt line. If we will look at this function, it starts from the definition of the `irqaction` and the `irq_desc`:
+`/proc/interrupts`의 출력에 표시됩니다. 그리고 마지막 매개 변수에서 우리는 포인터를 기본 `uart_port` 구조로 전달합니다. 이제 우리는 `request_irq` 함수와 그 매개 변수에 대해 조금 알고 있습니다. 구현을 살펴 보겠습니다. 위에서 볼 수 있듯이 `request_irq` 함수는 내부에서 `request_threaded_irq` 함수를 호출합니다. [kernel/irq/manage.c](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d93/kernel/irq/manage.c) 소스 코드 파일에 정의 된 `request_threaded_irq` 함수. 이 함수를 살펴보면 `irqaction`과 `irq_desc`의 정의에서 시작합니다.
 
 ```C
 int request_threaded_irq(unsigned int irq, irq_handler_t handler,

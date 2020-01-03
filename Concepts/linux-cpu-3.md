@@ -1,10 +1,10 @@
-The initcall mechanism
+initcall 메커니즘
 ================================================================================
 
-Introduction
+소개
 --------------------------------------------------------------------------------
 
-As you may understand from the title, this part will cover an interesting and important concept in the Linux kernel which is called - `initcall`. We already saw definitions like these:
+제목에서 알 수 있듯이 이 부분은 리눅스 커널에서 흥미롭고 중요한 개념인 `initcall`을 다룰 것입니다. 우리는 이미 다음과 같은 정의를 보았습니다.
 
 ```C
 early_param("debug", debug_kernel);
@@ -16,7 +16,7 @@ or
 arch_initcall(init_pit_clocksource);
 ```
 
-in some parts of the Linux kernel. Before we will see how this mechanism is implemented in the Linux kernel, we must know actually what is it and how the Linux kernel uses it. Definitions like these represent a [callback](https://en.wikipedia.org/wiki/Callback_%28computer_programming%29) function which is will be called during initialization of the Linux kernel of right after. Actually the main point of the `initcall` mechanism is to determine correct order of the built-in modules and subsystems initialization. For example let's look at the following function:
+리눅스 커널의 일부에서. 이 메커니즘이 Linux 커널에서 어떻게 구현되는지 살펴보기 전에 실제로 그 메커니즘과 Linux 커널이 이를 사용하는 방법을 알아야합니다. 이와 같은 정의는 [콜백](https://en.wikipedia.org/wiki/Callback_%28computer_programming%29) 함수를 나타냅니다.이 함수는 바로 Linux 커널 초기화 중에 호출됩니다. 실제로 `initcall` 메커니즘의 핵심은 내장 모듈과 서브 시스템 초기화의 올바른 순서를 결정하는 것입니다. 예를 들어 다음 기능을 살펴 보겠습니다.
 
 ```C
 static int __init nmi_warning_debugfs(void)
@@ -27,13 +27,13 @@ static int __init nmi_warning_debugfs(void)
 }
 ```
 
-from the [arch/x86/kernel/nmi.c](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/arch/x86/kernel/nmi.c) source code file. As we may see it just creates the `nmi_longest_ns` [debugfs](https://en.wikipedia.org/wiki/Debugfs) file in the `arch_debugfs_dir` directory. Actually, this `debugfs` file may be created only after the `arch_debugfs_dir` will be created. Creation of this directory occurs during the architecture-specific initialization of the Linux kernel. Actually this directory will be created in the `arch_kdebugfs_init` function from the [arch/x86/kernel/kdebugfs.c](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/arch/x86/kernel/kdebugfs.c) source code file. Note that the `arch_kdebugfs_init` function is marked as `initcall` too:
+[arch/x86/kernel/nmi.c](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/arch/x86/kernel/nmi.c) 소스 코드 파일에서 보시다시피 `arch_debugfs_dir` 디렉토리에 `nmi_longest_ns` [debugfs](https://en.wikipedia.org/wiki/Debugfs) 파일 만 생성됩니다. 실제로 이 `debugfs` 파일은 `arch_debugfs_dir`이 생성 된 후에만 생성 될 수 있습니다. 이 디렉토리는 Linux 커널의 아키텍처 별 초기화 중에 생성됩니다. 실제로 이 디렉토리는 [arch/x86/kernel/kdebugfs.c](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/arch/x86/kernel/kdebugfsc)의 `arch_kdebugfs_init` 함수에 생성됩니다. 소스 코드 파일 `arch_kdebugfs_init` 함수도 `initcall`로 표시됩니다:
 
 ```C
 arch_initcall(arch_kdebugfs_init);
 ```
 
-The Linux kernel calls all architecture-specific `initcalls` before the `fs` related `initcalls`. So, our `nmi_longest_ns` file will be created only after the `arch_kdebugfs_dir` directory will be created. Actually, the Linux kernel provides eight levels of main `initcalls`:
+리눅스 커널은 `fs` 관련 `initcalls` 전에 모든 아키텍처 특정 `initcalls`를 호출합니다. 따라서 `nmi_longest_ns` 파일은 `arch_kdebugfs_dir` 디렉토리가 생성 된 후에만 생성됩니다. 실제로 리눅스 커널은 8 가지 레벨의 `initcalls`을 제공합니다:
 
 * `early`;
 * `core`;
@@ -44,7 +44,7 @@ The Linux kernel calls all architecture-specific `initcalls` before the `fs` rel
 * `device`;
 * `late`.
 
-All of their names are represented by the `initcall_level_names` array which is defined in the [init/main.c](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/init/main.c) source code file:
+모든 이름은 [init/main.c](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/init/main.c) 소스 코드 파일에 정의 된 `initcall_level_names` 배열로 표시됩니다:
 
 ```C
 static char *initcall_level_names[] __initdata = {
@@ -59,12 +59,12 @@ static char *initcall_level_names[] __initdata = {
 };
 ```
 
-All functions which are marked as `initcall` by these identifiers, will be called in the same order or at first `early initcalls` will be called, at second `core initcalls` and etc. From this moment we know a little about `initcall` mechanism, so we can start to dive into the source code of the Linux kernel to see how this mechanism is implemented.
+이 식별자에 의해 `initcall`로 표시된 모든 함수는 동일한 순서로 호출되거나 처음에는 `초기 initcalls`, 두 번째는 `core initcalls`등에서 호출됩니다.이 순간부터 우리는 `initcall`에 대해 조금 알고 있습니다. `메커니즘, 그래서 우리는 이 메커니즘이 어떻게 구현되는지보기 위해 리눅스 커널의 소스 코드로 뛰어 들기 시작할 수있다.
 
-Implementation initcall mechanism in the Linux kernel
+리눅스 커널에서 initcall 메커니즘 구현
 --------------------------------------------------------------------------------
 
-The Linux kernel provides a set of macros from the [include/linux/init.h](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/include/linux/init.h) header file to mark a given function as `initcall`. All of these macros are pretty simple:
+리눅스 커널은 [include/linux/init.h](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/include/linux/init.h) 헤더 파일에서 매크로 집합을 제공하여 주어진 함수를 `initcall`로 표시합니다. 이 매크로는 모두 매우 간단합니다.
 
 ```C
 #define early_initcall(fn)		__define_initcall(fn, early)
@@ -77,12 +77,12 @@ The Linux kernel provides a set of macros from the [include/linux/init.h](https:
 #define late_initcall(fn)		__define_initcall(fn, 7)
 ```
 
-and as we may see these macros just expand to the call of the `__define_initcall` macro from the same header file. Moreover, the `__define_initcall` macro takes two arguments:
+우리가 볼 수 있듯이 이러한 매크로는 동일한 헤더 파일에서 `__define_initcall` 매크로의 호출로 확장됩니다. 또한, `__define_initcall` 매크로는 두 개의 인자를 사용합니다:
 
-* `fn` - callback function which will be called during call of `initcalls` of the certain level;
-* `id` - identifier to identify `initcall` to prevent error when two the same `initcalls` point to the same handler.
+* `fn` - 특정 레벨의 `initcalls` 호출 중에 호출되는 콜백 함수;
+* `id` - 동일한 두 개의 `initcalls`가 동일한 핸들러를 가리키는 경우 오류를 방지하기 위해 `initcall`을 식별하는 식별자.
 
-The implementation of the `__define_initcall` macro looks like:
+`__define_initcall` 매크로의 구현은 다음과 같습니다:
 
 ```C
 #define __define_initcall(fn, id) \
@@ -91,13 +91,13 @@ The implementation of the `__define_initcall` macro looks like:
 	LTO_REFERENCE_INITCALL(__initcall_##fn##id)
 ```
 
-To understand the `__define_initcall` macro, first of all let's look at the `initcall_t` type. This type is defined in the same [header]() file and it represents pointer to a function which returns pointer to [integer](https://en.wikipedia.org/wiki/Integer) which will be result of the `initcall`:
+`__define_initcall` 매크로를 이해하기 위해서는 먼저 `initcall_t`타입을 살펴 봅시다. 이 타입은 같은 [header]() 파일에 정의되어 있으며 `initcall`의 결과인 [integer](https://en.wikipedia.org/wiki/Integer)에 대한 포인터를 반환하는 함수에 대한 포인터를 나타냅니다:
 
 ```C
 typedef int (*initcall_t)(void);
 ```
 
-Now let's return to the `_-define_initcall` macro. The [##](https://gcc.gnu.org/onlinedocs/cpp/Concatenation.html) provides ability to concatenate two symbols. In our case, the first line of the `__define_initcall` macro produces definition of the given function which is located in the `.initcall id .init` [ELF section](http://www.skyfree.org/linux/references/ELF_Format.pdf) and marked with the following [gcc](https://en.wikipedia.org/wiki/GNU_Compiler_Collection) attributes: `__initcall_function_name_id` and `__used`. If we will look in the [include/asm-generic/vmlinux.lds.h](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/include/asm-generic/vmlinux.lds.h) header file which represents data for the kernel [linker](https://en.wikipedia.org/wiki/Linker_%28computing%29) script, we will see that all of `initcalls` sections will be placed in the `.data` section:
+이제 `_-define_initcall` 매크로로 돌아 갑시다. [##](https://gcc.gnu.org/onlinedocs/cpp/Concatenation.html)은 두 개의 심볼을 연결하는 기능을 제공합니다. 우리의 경우, `__define_initcall` 매크로의 첫 번째 줄은 `.initcall id .init` [ELF section](http://www.skyfree.org/linux/references/ELF_Format.pdf)에 있고 다음의 [gcc](https://en.wikipedia.org/wiki/GNU_Compiler_Collection) 속성으로 표시되는 주어진 함수의 정의를 생성합니다: `__initcall_function_name_id` 및 `__used`. 커널 [linker](https://en.wikipedia.org/wiki/Linker_%28computing%29) 스크립트의 데이터를 나타내는 [include/asm-generic/vmlinux.lds.h](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/include/asm-generic/vmlinux.lds.h) 헤더 파일을 살펴보면 모든 `initcalls` 섹션이 `.data` 섹션에 배치됩니다:
 
 ```C
 #define INIT_CALLS					\
@@ -123,19 +123,19 @@ Now let's return to the `_-define_initcall` macro. The [##](https://gcc.gnu.org/
 
 ```
 
-The second attribute - `__used` is defined in the [include/linux/compiler-gcc.h](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/include/linux/compiler-gcc.h) header file and it expands to the definition of the following `gcc` attribute:
+두 번째 속성 인 `__used`는 [include/linux/compiler-gcc.h](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/include/linux/compiler-gcc.h) 헤더에 정의되어 있습니다. 파일과 다음 `gcc` 속성의 정의로 확장됩니다:
 
 ```C
 #define __used   __attribute__((__used__))
 ```
 
-which prevents `variable defined but not used` warning. The last line of the `__define_initcall` macro is:
+변수 정의되었지만 사용되지 않은 경고를 방지합니다. `__define_initcall` 매크로의 마지막 줄은 다음과 같습니다:
 
 ```C
 LTO_REFERENCE_INITCALL(__initcall_##fn##id)
 ```
 
-depends on the `CONFIG_LTO` kernel configuration option and just provides stub for the compiler [Link time optimization](https://gcc.gnu.org/wiki/LinkTimeOptimization):
+`CONFIG_LTO` 커널 설정 옵션에 의존하고 컴파일러를 위한 스텁을 제공합니다. [링크 시간 최적화](https://gcc.gnu.org/wiki/LinkTimeOptimization):
 
 ```
 #ifdef CONFIG_LTO
@@ -149,9 +149,9 @@ depends on the `CONFIG_LTO` kernel configuration option and just provides stub f
 #endif
 ```
 
-In order to prevent any problem when there is no reference to a variable in a module, it will be moved to the end of the program. That's all about the `__define_initcall` macro. So, all of the `*_initcall` macros will be expanded during compilation of the Linux kernel, and all `initcalls` will be placed in their sections and all of them will be available from the `.data` section and the Linux kernel will know where to find a certain `initcall` to call it during initialization process.
+모듈에 변수에 대한 참조가 없을 때 문제를 방지하기 위해 프로그램의 끝으로 이동합니다. 이것이 `__define_initcall` 매크로에 관한 것입니다. 따라서 모든 `* _initcall` 매크로는 Linux 커널 컴파일 중에 확장되며 모든 `initcalls`는 해당 섹션에 배치되며 모든 `.data` 섹션에서 사용할 수 있으며 Linux 커널은 초기화 과정에서 호출 할 특정 `initcall`을 찾을 수 있는 곳을 알고 있어야합니다.
 
-As `initcalls` can be called by the Linux kernel, let's look how the Linux kernel does this. This process starts in the `do_basic_setup` function from the [init/main.c](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/init/main.c) source code file:
+리눅스 커널이 `initcalls`를 호출 할 수 있기 때문에 리눅스 커널이 이를 어떻게 수행하는지 살펴 보자. 이 프로세스는 [init/main.c](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/init/main.c) 소스 코드 파일의 `do_basic_setup` 기능에서 시작합니다:
 
 ```C
 static void __init do_basic_setup(void)
@@ -166,7 +166,7 @@ static void __init do_basic_setup(void)
 }
 ```
 
-which is called during the initialization of the Linux kernel, right after main steps of initialization like memory manager related initialization, `CPU` subsystem and other already finished. The `do_initcalls` function just goes through the array of `initcall` levels and call the `do_initcall_level` function for each level:
+메모리 관리자 관련 초기화,`CPU` 서브 시스템 및 기타 이미 완료된 주요 초기화 단계 직후에 Linux 커널 초기화 중에 호출됩니다. `do_initcalls` 함수는 `initcall` 레벨의 배열을 거치고 각 레벨에 대해 `do_initcall_level` 함수를 호출합니다:
 
 ```C
 static void __init do_initcalls(void)
@@ -178,7 +178,7 @@ static void __init do_initcalls(void)
 }
 ```
 
-The `initcall_levels` array is defined in the same source code [file](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/init/main.c) and contains pointers to the sections which were defined in the `__define_initcall` macro:
+`initcall_levels` 배열은 동일한 소스 코드 [file](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/init/main.c)에 정의되며`__define_initcall` 매크로에 정의 된 섹션에 대한 포인터를 포함합니다.
 
 ```C
 static initcall_t *initcall_levels[] __initdata = {
@@ -194,7 +194,7 @@ static initcall_t *initcall_levels[] __initdata = {
 };
 ```
 
-If you are interested, you can find these sections in the `arch/x86/kernel/vmlinux.lds` linker script which is generated after the Linux kernel compilation:
+관심이 있다면 리눅스 커널 컴파일 후에 생성 된 `arch/x86/kernel/vmlinux.lds` 링커 스크립트에서 다음 섹션을 찾을 수 있습니다:
 
 ```
 .init.data : AT(ADDR(.init.data) - 0xffffffff80000000) {
@@ -213,16 +213,16 @@ If you are interested, you can find these sections in the `arch/x86/kernel/vmlin
 }
 ```
 
-If you are not familiar with this then you can know more about [linkers](https://en.wikipedia.org/wiki/Linker_%28computing%29) in the special [part](https://0xax.gitbooks.io/linux-insides/content/Misc/linux-misc-3.html) of this book.
+이것에 익숙하지 않다면이 책의 특별 [부분](https://0xax.gitbooks.io/linux-insides/content/Misc/linux-misc-3.html)에서 [링커](https://en.wikipedia.org/wiki/Linker_%28computing%29)에 대해 더 많이 알 수 있습니다.
 
-As we just saw, the `do_initcall_level` function takes one parameter - level of `initcall` and does following two things: First of all this function parses the `initcall_command_line` which is copy of usual kernel [command line](https://github.com/torvalds/linux/blob/master/Documentation/admin-guide/kernel-parameters.rst) which may contain parameters for modules with the `parse_args` function from the [kernel/params.c](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/kernel/params.c) source code file and call the `do_on_initcall` function for each level:
+방금 살펴본 바와 같이 `do_initcall_level` 함수는 하나의 매개변수인 `initcall` 레벨을 취하고 다음 두 가지를 수행한다. 우선이 함수는 매개 변수를 포함 할 수있는 일반적인 커널 [command line](https://github.com/torvalds/linux/blob/master/Documentation/admin-guide/kernel-parameters.rst)의 사본인 `initcall_command_line`을 분석한다. 에서 [커널/params.c](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/kernel/params.c) 소스 코드 파일에서 'parse_args` 기능 모듈은 각각의 레벨에 대한 `do_on_initcall` 함수를 호출:
 
 ```C
 for (fn = initcall_levels[level]; fn < initcall_levels[level+1]; fn++)
 		do_one_initcall(*fn);
 ```
 
-The `do_on_initcall` does  main job for us. As we may see, this function takes one parameter which represent `initcall` callback function and does the call of the given callback:
+`do_on_initcall`은 우리에게 중요한 역할을 합니다. 보시다시피,이 함수는 `initcall` 콜백 함수를 나타내는 하나의 매개 변수를 취하며 주어진 콜백의 호출을 수행합니다:
 
 ```C
 int __init_or_module do_one_initcall(initcall_t fn)
@@ -255,8 +255,7 @@ int __init_or_module do_one_initcall(initcall_t fn)
 }
 ```
 
-Let's try to understand what does the `do_on_initcall` function does. First of all we increase [preemption](https://en.wikipedia.org/wiki/Preemption_%28computing%29) counter so that we can check it later to be sure that it is not imbalanced. After this step we can see the call of the `initcall_backlist` function which
-goes over the `blacklisted_initcalls` list which stores blacklisted `initcalls` and releases the given `initcall` if it is located in this list:
+`do_on_initcall` 함수의 기능을 이해하려고 노력하자. 우선 [선점](https://en.wikipedia.org/wiki/Preemption_%28computing%29) 카운터를 늘려 나중에 불균형이 없는지 확인할 수 있습니다. 이 단계 후에 우리는 `initcall_backlist` 함수의 호출을 볼 수 있습니다. 블랙리스트에있는 `initcalls`를 저장하는 `blacklisted_initcalls`목록을 살펴보고 주어진 `initcall`이 이 목록에 있으면 해제합니다:
 
 ```C
 list_for_each_entry(entry, &blacklisted_initcalls, next) {
@@ -268,9 +267,9 @@ list_for_each_entry(entry, &blacklisted_initcalls, next) {
 }
 ```
 
-The blacklisted `initcalls` stored in the `blacklisted_initcalls` list and this list is filled during early Linux kernel initialization from the Linux kernel command line.
+블랙리스트에있는 `initcalls`는 `blacklisted_initcalls` 목록에 저장되며 이 목록은 Linux 커널 명령 행에서 초기 Linux 커널 초기화 중에 채워집니다.
 
-After the blacklisted `initcalls` will be handled, the next part of code does directly the call of the `initcall`:
+블랙리스트에있는 `initcalls`가 처리 된 후 코드의 다음 부분은 `initcall`을 직접 호출합니다:
 
 ```C
 if (initcall_debug)
@@ -279,13 +278,13 @@ else
 	ret = fn();
 ```
 
-Depends on the value of the `initcall_debug` variable, the `do_one_initcall_debug` function will call `initcall` or this function will do it directly via `fn()`. The `initcall_debug` variable is defined in the [same](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/init/main.c) source code file:
+`initcall_debug` 변수의 값에 따라 `do_one_initcall_debug` 함수는 `initcall`을 호출하거나이 함수는 `fn()`을 통해 직접 수행합니다. `initcall_debug` 변수는 [same](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/init/main.c) 소스 코드 파일에 정의되어 있습니다:
 
 ```C
 bool initcall_debug;
 ```
 
-and provides ability to print some information to the kernel [log buffer](https://en.wikipedia.org/wiki/Dmesg). The value of the variable can be set from the kernel commands via the `initcall_debug` parameter. As we can read from the [documentation](https://github.com/torvalds/linux/blob/master/Documentation/admin-guide/kernel-parameters.rst) of the Linux kernel command line:
+커널[log buffer](https://en.wikipedia.org/wiki/Dmesg)에 일부 정보를 인쇄하는 기능을 제공합니다. 변수의 값은 커널 명령에서 `initcall_debug` 매개 변수를 통해 설정할 수 있습니다. Linux 커널 명령 행의 [documentation](https://github.com/torvalds/linux/blob/master/Documentation/admin-guide/kernel-parameters.rst)에서 읽을 수있는 것 처럼:
 
 ```
 initcall_debug	[KNL] Trace initcalls as they are executed.  Useful
@@ -293,7 +292,7 @@ initcall_debug	[KNL] Trace initcalls as they are executed.  Useful
                       startup.
 ```
 
-And that's true. If we will look at the implementation of the `do_one_initcall_debug` function, we will see that it does the same as the `do_one_initcall` function or i.e. the `do_one_initcall_debug` function calls the given `initcall` and prints some information (like the [pid](https://en.wikipedia.org/wiki/Process_identifier) of the currently running task, duration of execution of the `initcall` and etc.) related to the execution of the given `initcall`:
+그리고 그것은 사실입니다. `do_one_initcall_debug` 함수의 구현을 살펴보면,이 함수가 `do_one_initcall` 함수와 동일하거나 `do_one_initcall_debug` 함수가 주어진 `initcall`을 호출하고 일부 정보 (예 : 현재 실행중인 작업의 [pid](https://en.wikipedia.org/wiki/Process_identifier), `initcall`의 실행 기간 등):
 
 ```C
 static int __init_or_module do_one_initcall_debug(initcall_t fn)
@@ -315,7 +314,7 @@ static int __init_or_module do_one_initcall_debug(initcall_t fn)
 }
 ```
 
-As an `initcall` was called by the one of the ` do_one_initcall` or `do_one_initcall_debug` functions, we may see two checks in the end of the `do_one_initcall` function. The first one checks the amount of possible `__preempt_count_add` and `__preempt_count_sub` calls inside of the executed initcall, and if this value is not equal to the previous value of the preemptible counter, we add the `preemption imbalance` string to the message buffer and set correct value of the preemptible counter:
+`initcall`은 `do_one_initcall` 또는 `do_one_initcall_debug` 함수 중 하나에 의해 호출되었으므로, `do_one_initcall` 함수의 끝에 두 가지 검사가 있을 수 있습니다. 첫 번째는 실행 된 initcall 내부에서 가능한 `__preempt_count_add` 및 `__preempt_count_sub` 호출의 양을 확인하고 이 값이 선점 형 카운터의 이전 값과 같지 않으면 메시지 버퍼에 `preemption imbalance` 문자열을 추가합니다. 선점 카운터의 올바른 값을 설정하십시오:
 
 ```C
 if (preempt_count() != count) {
@@ -324,7 +323,7 @@ if (preempt_count() != count) {
 }
 ```
 
-Later this error string will be printed. The last check the state of local [IRQs](https://en.wikipedia.org/wiki/Interrupt_request_%28PC_architecture%29) and if they are disabled, we add the `disabled interrupts` strings to the our message buffer and enable `IRQs` for the current processor to prevent the state when `IRQs` were disabled by an `initcall` and didn't enable again:
+나중에 이 오류 문자열이 인쇄됩니다. 마지막으로 로컬 [IRQs](https://en.wikipedia.org/wiki/Interrupt_request_%28PC_architecture%29)의 상태를 확인하고 비활성화 된 경우 메시지 버퍼에 ``비활성화 된 인터럽트` 문자열을 추가하고 활성화합니다. `initcall`에 의해 `IRQs`가 비활성화되고 다시 활성화되지 않은 상태를 방지하기 위해 현재 프로세서에 대한 `IRQs`:
 
 ```C
 if (irqs_disabled()) {
@@ -333,27 +332,27 @@ if (irqs_disabled()) {
 }
 ```
 
-That's all. In this way the Linux kernel does initialization of many subsystems in a correct order. From now on, we know what is the `initcall` mechanism in the Linux kernel. In this part, we covered main general portion of the `initcall` mechanism but we left some important concepts. Let's make a short look at these concepts.
+그게 다입니다. 이런 식으로 Linux 커널은 많은 서브 시스템을 올바른 순서로 초기화합니다. 이제부터 리눅스 커널에서 `initcall` 메커니즘이 무엇인지 알게되었다. 이 부분에서는 `initcall` 메커니즘의 주요 부분을 다루었지만 몇 가지 중요한 개념을 남겼습니다. 이 개념들을 간단히 살펴 봅시다.
 
-First of all, we have missed one level of `initcalls`, this is `rootfs initcalls`. You can find definition of the `rootfs_initcall` in the [include/linux/init.h](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/include/linux/init.h) header file along with all similar macros which we saw in this part:
+우선, 우리는 한 단계의 `initcalls`를 놓쳤습니다. 이것이 바로 `rootfs initcalls`입니다. `rootfs_initcall`의 정의는 [include/linux/init.h](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/include/linux/init.h) 헤더 파일에서 모두 찾을 수 있습니다. 이 부분에서 본 유사한 매크로:
 
 ```C
 #define rootfs_initcall(fn)		__define_initcall(fn, rootfs)
 ```
 
-As we may understand from the macro's name, its main purpose is to store callbacks which are related to the [rootfs](https://en.wikipedia.org/wiki/Initramfs). Besides this goal, it may be useful to initialize other stuffs after initialization related to filesystems level only if devices related stuff are not initialized. For example, the decompression of the [initramfs](https://en.wikipedia.org/wiki/Initramfs) which occurred in the `populate_rootfs` function from the [init/initramfs.c](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/init/initramfs.c) source code file:
+매크로 이름에서 알 수 있듯이 주요 목적은 [rootfs](https://en.wikipedia.org/wiki/Initramfs)와 관련된 콜백을 저장하는 것입니다. 이 목표 외에, 장치 관련 항목이 초기화되지 않은 경우에만 파일 시스템 수준과 관련된 초기화 후 다른 항목을 초기화하는 것이 유용 할 수 있습니다. 예를 들어, [init/initramfs.c](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/init/initramfs.c) 소스 코드 파일의 `populate_rootfs` 함수에서 발생한 [initramfs](https://en.wikipedia.org/wiki/Initramfs)의 압축 해제:
 
 ```C
 rootfs_initcall(populate_rootfs);
 ```
 
-From this place, we may see familiar output:
+이 곳에서 우리는 익숙한 결과를 볼 수 있습니다:
 
 ```
 [    0.199960] Unpacking initramfs...
 ```
 
-Besides the `rootfs_initcall` level, there are additional `console_initcall`, `security_initcall` and other secondary `initcall` levels. The last thing that we have missed is the set of the `*_initcall_sync` levels. Almost each `*_initcall` macro that we have seen in this part, has macro companion with the `_sync` prefix:
+`rootfs_initcall` 레벨 외에도 추가적인 `console_initcall`,`security_initcall` 및 기타 보조 `initcall` 레벨이 있습니다. 마지막으로 놓친 것은 `* _initcall_sync` 레벨 세트입니다. 이 부분에서 보았던 거의 모든 `* _initcall` 매크로는 `_sync` 접두어와 매크로를 동반합니다:
 
 ```C
 #define core_initcall_sync(fn)		__define_initcall(fn, 1s)
@@ -365,20 +364,20 @@ Besides the `rootfs_initcall` level, there are additional `console_initcall`, `s
 #define late_initcall_sync(fn)		__define_initcall(fn, 7s)
 ```
 
-The main goal of these additional levels is to wait for completion of all a module related initialization routines for a certain level.
+이러한 추가 레벨의 주요 목표는 특정 레벨에 대한 모든 모듈 관련 초기화 루틴이 완료 될 때까지 기다리는 것입니다.
 
-That's all.
+그게 답니다.
 
-Conclusion
+결론
 --------------------------------------------------------------------------------
 
-In this part we saw the important mechanism of the Linux kernel which allows to call a function which depends on the current state of the Linux kernel during its initialization.
+이 부분에서 우리는 리눅스 커널이 초기화하는 동안 리눅스 커널의 현재 상태에 의존하는 함수를 호출 할 수있는 중요한 리눅스 커널 메커니즘을 보았다.
 
-If you have questions or suggestions, feel free to ping me in twitter [0xAX](https://twitter.com/0xAX), drop me [email](anotherworldofworld@gmail.com) or just create [issue](https://github.com/0xAX/linux-insides/issues/new).
+궁금한 점이나 제안이 있으시면 트위터 [0xAX](https://twitter.com/0xAX)에 저를 핑(ping)하거나 [이메일](anotherworldofworld@gmail.com)로 보내거나 [문제](https://github.com/0xAX/linux-insides/issues/new).
 
-**Please note that English is not my first language and I am really sorry for any inconvenience. If you found any mistakes please send me PR to [linux-insides](https://github.com/0xAX/linux-insides).**.
+** 영어는 제 모국어가 아니여서 불편을 끼쳐 드려 죄송합니다. 실수를 발견하면 PR을 [linux-insides](https://github.com/0xAX/linux-insides)로 보내주십시오. **.
 
-Links
+링크
 --------------------------------------------------------------------------------
 
 * [callback](https://en.wikipedia.org/wiki/Callback_%28computer_programming%29)

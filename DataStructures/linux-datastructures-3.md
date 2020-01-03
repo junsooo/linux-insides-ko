@@ -1,44 +1,45 @@
-Data Structures in the Linux Kernel
+리눅스 커널의 여러 데이터 구조
 ================================================================================
 
-Bit arrays and bit operations in the Linux kernel
+리눅스 커널에서의 비트 배열과 비트 연산
 --------------------------------------------------------------------------------
 
-Besides different [linked](https://en.wikipedia.org/wiki/Linked_data_structure) and [tree](https://en.wikipedia.org/wiki/Tree_%28data_structure%29) based data structures, the Linux kernel provides [API](https://en.wikipedia.org/wiki/Application_programming_interface) for [bit arrays](https://en.wikipedia.org/wiki/Bit_array) or `bitmap`. Bit arrays are heavily used in the Linux kernel and following source code files contain common `API` for work with such structures:
+서로 다른 [linked](https://en.wikipedia.org/wiki/Linked_data_structure) 와 [tree](https://en.wikipedia.org/wiki/Tree_%28data_structure%29) 기반의 데이터 구조 외에도 Linux 커널은 [bit arrays](https://en.wikipedia.org/wiki/Bit_array) 또는 `bitmap`에 [API](https://en.wikipedia.org/wiki/Application_programming_interface)를 제공합니다. 비트 배열은 Linux 커널에서 많이 사용되며 다음 소스 코드 파일에는 이러한 구조로 작업하기 위한 공통 `API`가 포함됩니다.
 
 * [lib/bitmap.c](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/lib/bitmap.c)
 * [include/linux/bitmap.h](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/include/linux/bitmap.h)
 
-Besides these two files, there is also architecture-specific header file which provides optimized bit operations for certain architecture. We consider [x86_64](https://en.wikipedia.org/wiki/X86-64) architecture, so in our case it will be: 
+
+이 두 파일 외에도 특정 아키텍처에 최적화 된 비트 연산을 제공하는 아키텍처 별 헤더 파일도 있습니다. 우리는 [x86_64](https://en.wikipedia.org/wiki/X86-64) 아키텍처를 고려하므로 우리의 경우 다음과 같습니다.
 
 * [arch/x86/include/asm/bitops.h](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/arch/x86/include/asm/bitops.h)
 
-header file. As I just wrote above, the `bitmap` is heavily used in the Linux kernel. For example a `bit array` is used to store set of online/offline processors for systems which support [hot-plug](https://www.kernel.org/doc/Documentation/cpu-hotplug.txt) cpu (more about this you can read in the [cpumasks](https://0xax.gitbooks.io/linux-insides/content/Concepts/linux-cpu-2.html) part), a `bit array` stores set of allocated [irqs](https://en.wikipedia.org/wiki/Interrupt_request_%28PC_architecture%29) during initialization of the Linux kernel and etc.
+헤더 파일. 위에서 쓴 것처럼 `bitmap`은 Linux 커널에서 많이 사용됩니다. 예를 들어, `bit array`는 [hot-plug](https://www.kernel.org/doc/Documentation/cpu-hotplug.txt) cpu를 지원하는 시스템을 위한 온라인/오프라인 프로세서 세트를 저장하는 데 사용됩니다 (자세한 내용은 [cpumasks](https://0xax.gitbooks.io/linux-insides/content/Concepts/linux-cpu-2.html) 부분에서 읽을 수 있음). 또 리눅스 커널 등을 초기화하는 동안 할당 된 [irqs](https://en.wikipedia.org/wiki/Interrupt_request_%28PC_architecture%29) 세트를 저장하는데에도 사용됩니다.
 
-So, the main goal of this part is to see how `bit arrays` are implemented in the Linux kernel. Let's start.
+따라서 이 파트의 주요 목표는 Linux 커널에서 `bit array(비트 배열)`가 어떻게 구현되는지 확인하는 것입니다. 시작합시다.
 
-Declaration of bit array
+비트 배열의 선언
 ================================================================================
 
-Before we will look on `API` for bitmaps manipulation, we must know how to declare it in the Linux kernel. There are two common method to declare own bit array. The first simple way to declare a bit array is to array of `unsigned long`. For example:
+비트 맵 조작에 대한 `API`를 살펴보기 전에 Linux 커널에서 이를 선언하는 방법을 알아야합니다. 자신의 비트 배열을 선언하는 두 가지의 일반적인 방법이 있습니다. 비트 배열을 선언하는 첫 번째 간단한 방법은 `unsigned long` 배열입니다. 예를 들면 다음과 같습니다. :
 
 ```C
 unsigned long my_bitmap[8]
 ```
 
-The second way is to use the `DECLARE_BITMAP` macro which is defined in the [include/linux/types.h](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/include/linux/types.h) header file:
+두 번째 방법은 [include/linux/types.h](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/include/linux/types.h) 헤더 파일에 정의 된 `DECLARE_BITMAP` 매크로를 사용하는 것입니다. :
 
 ```C
 #define DECLARE_BITMAP(name,bits) \
     unsigned long name[BITS_TO_LONGS(bits)]
 ```
 
-We can see that `DECLARE_BITMAP` macro takes two parameters:
+`DECLARE_BITMAP` 매크로는 두 가지 매개 변수를 사용합니다. :
 
-* `name` - name of bitmap;
-* `bits` - amount of bits in bitmap;
+* `name` - 비트맵의 이름;
+* `bits` - 비트맵의 비트 수;
 
-and just expands to the definition of `unsigned long` array with `BITS_TO_LONGS(bits)` elements, where the `BITS_TO_LONGS` macro converts a given number of bits to number of `longs` or in other words it calculates how many `8` byte elements in `bits`:
+그리고 `BITS_TO_LONGS(bits)` 요소를 사용하여 `unsigned long` 배열의 정의로 확장합니다. 여기서 `BITS_TO_LONGS` 매크로는 주어진 비트 수를 `longs` 수로 변환합니다. 즉, `bits` 안의 `8` 바이트 요소의 수를 게산합니다.:
 
 ```C
 #define BITS_PER_BYTE           8
@@ -46,36 +47,36 @@ and just expands to the definition of `unsigned long` array with `BITS_TO_LONGS(
 #define BITS_TO_LONGS(nr)       DIV_ROUND_UP(nr, BITS_PER_BYTE * sizeof(long))
 ```
 
-So, for example `DECLARE_BITMAP(my_bitmap, 64)` will produce:
+따라서, 예를들어 `DECLARE_BITMAP(my_bitmap, 64)` 는 다음을 생성할 것입니다. :
 
 ```python
 >>> (((64) + (64) - 1) / (64))
 1
 ```
 
-and:
+그리고 :
 
 ```C
 unsigned long my_bitmap[1];
 ```
 
-After we are able to declare a bit array, we can start to use it.
+비트 배열을 선언 한 후에는 이제 사용할 수 있습니다.
 
-Architecture-specific bit operations
+아키텍처 별 비트 연산
 ================================================================================
 
-We already saw above a couple of source code and header files which provide [API](https://en.wikipedia.org/wiki/Application_programming_interface) for manipulation of bit arrays. The most important and widely used API of bit arrays is architecture-specific and located as we already know in the [arch/x86/include/asm/bitops.h](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/arch/x86/include/asm/bitops.h) header file.
+우리는 이미 비트 배열의 조작을위한 [API](https://en.wikipedia.org/wiki/Application_programming_interface)를 제공하는 몇 가지 소스 코드와 헤더 파일을 보았습니다. 비트 배열의 가장 중요하고 널리 사용되는 API는 아키텍처에 따라 다르며 [arch/x86/include/asm/bitops.h](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/arch/x86/include/asm/bitops.h) 헤더 파일에서 이미 알고 있습니다.
 
-First of all let's look at the two most important functions:
+우선 가장 중요한 두 가지 함수를 살펴 보겠습니다. :
 
 * `set_bit`;
 * `clear_bit`.
 
-I think that there is no need to explain what these function do. This is already must be clear from their name. Let's look on their implementation. If you will look into the [arch/x86/include/asm/bitops.h](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/arch/x86/include/asm/bitops.h) header file, you will note that each of these functions represented by two variants: [atomic](https://en.wikipedia.org/wiki/Linearizability) and not. Before we will start to dive into implementations of these functions, first of all we must to know a little about `atomic` operations.
+이 함수들이 무엇을 하는지는 설명 할 필요없다고 생각합니다. 그것은 이미 함수들의 이름에서부터 분명합니다. 함수들의 구현을 살펴 봅시다. [arch/x86/include/asm/bitops.h](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/arch/x86/include/asm/bitops.h) 헤더 파일을 살펴보면 이러한 각 함수들은 [atomic](https://en.wikipedia.org/wiki/Linearizability)과 not의 두 가지 변형으로 나타납니다. 이러한 함수의 구현을 시작하기 전에 먼저 `atomic(원자적)` 연산 에 대해 어느정도 알아야합니다.
 
-In simple words atomic operations guarantees that two or more operations will not be performed on the same data concurrently. The `x86` architecture provides a set of atomic instructions, for example [xchg](http://x86.renejeschke.de/html/file_module_x86_id_328.html) instruction, [cmpxchg](http://x86.renejeschke.de/html/file_module_x86_id_41.html) instruction and etc. Besides atomic instructions, some of non-atomic instructions can be made atomic with the help of the [lock](http://x86.renejeschke.de/html/file_module_x86_id_159.html) instruction. It is enough to know about atomic operations for now, so we can begin to consider implementation of `set_bit` and `clear_bit` functions.
+간단히 말해서 원자적 연산은 두 개 이상의 연산이 동일한 데이터에 대해 동시에 수행되지 않도록 하는 것입니다. `x86` 아키텍처는 원자 명령어 세트를 제공합니다. 예를 들어 [xchg](http://x86.renejeschke.de/html/file_module_x86_id_328.html) 명령어, [cmpxchg](http://x86.renejeschke.de/html/file_module_x86_id_41.html) 명령어 등 원자 명령어 외에 일부는 원자 명령어가 [lock](http://x86.renejeschke.de/html/file_module_x86_id_159.html) 명령어의 도움으로 원자적으로 만들 수 있습니다. 이제 원자 연산에 대해 아는 것이 충분하므로 `set_bit`와 `clear_bit` 함수의 구현을 고려할 수 있습니다.
 
-First of all, let's start to consider `non-atomic` variants of this function. Names of non-atomic `set_bit` and `clear_bit` starts from double underscore. As we already know, all of these functions are defined in the [arch/x86/include/asm/bitops.h](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/arch/x86/include/asm/bitops.h) header file and the first function is `__set_bit`:
+우선, 이 함수의 `비원자적` 변형을 고려해 봅시다. 비원자 `set_bit` 와 `clear_bit`의 이름은 두개의 밑줄로 시작합니다. 우리가 이미 알고 있듯이 이러한 모든 함수는 [arch/x86/include/asm/bitops.h](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/arch/x86/include/asm/bitops.h) 헤더 파일에 정의되어 있으며 첫 번째 함수는 `__set_bit`입니다. :
 
 ```C
 static inline void __set_bit(long nr, volatile unsigned long *addr)
@@ -84,27 +85,27 @@ static inline void __set_bit(long nr, volatile unsigned long *addr)
 }
 ```
 
-As we can see it takes two arguments:
+보시다시피 두개의 매개변수를 가집니다. :
 
-* `nr` - number of bit in a bit array.
-* `addr` - address of a bit array where we need to set bit.
+* `nr` - 비트 배열의 비트 수;
+* `addr` -우리가 비트를 설정할 필요가 있는 비트 배열의 주소.
 
-Note that the `addr` parameter is defined with `volatile` keyword which tells to compiler that value maybe changed by the given address. The implementation of the `__set_bit` is pretty easy. As we can see, it just contains one line of [inline assembler](https://en.wikipedia.org/wiki/Inline_assembler) code. In our case we are using the [bts](http://x86.renejeschke.de/html/file_module_x86_id_25.html) instruction which selects a bit which is specified with the first operand (`nr` in our case) from the bit array, stores the value of the selected bit in the [CF](https://en.wikipedia.org/wiki/FLAGS_register) flags register and set this bit.
+`addr` 파라미터는 `volatile` 키워드로 정의되어 주어진 주소에 의해 값이 변경 될 수 있음을 컴파일러에 알려줍니다. `__set_bit`의 구현은 매우 쉽습니다. 보시다시피 한 줄의 [inline assembler](https://en.wikipedia.org/wiki/Inline_assembler) 코드만 포함되어 있습니다. 우리의 경우 비트 배열에서 첫 번째 피연산자 (우리의 경우 `nr`)로 지정된 비트를 선택하고 선택된 비트의 값을 [CF](https://en.wikipedia.org/wiki/FLAGS_register) 플래그 레지스터에 저장하는 [bts](http://x86.renejeschke.de/html/file_module_x86_id_25.html)  명령어를 사용합니다. 이 비트를 설정하세요.
 
-Note that we can see usage of the `nr`, but there is `addr` here. You already might guess that the secret is in `ADDR`. The `ADDR` is the macro which is defined in the same header code file and expands to the string which contains value of the given address and `+m` constraint:
+`nr`의 사용법을 볼 수도 있지만 여기에 `addr`이 있습니다. 당신은 이미 그 비밀이 `ADDR`에 있다고 추측 할 것입니다. `ADDR`은 동일한 헤더 코드 파일에 정의 된 매크로이며 주어진 주소와 `+m` 제약 조건을 포함하는 문자열로 확장됩니다. :
 
 ```C
 #define ADDR				BITOP_ADDR(addr)
-#define BITOP_ADDR(x) "+m" (*(volatile long *) (x))
+#define BITOP_ADDR(x) "+m" (* (volatile long * ) (x))
 ```
 
-Besides the `+m`, we can see other constraints in the `__set_bit` function. Let's look on they and try to understand what do they mean:
+`+m` 외에도 `__set_bit` 함수에서 다른 제약 조건을 볼 수 있습니다. 그것들을 살펴보고 그들이 무엇을 의미하는지 이해해봅시다.
 
-* `+m` - represents memory operand where `+` tells that the given operand will be input and output operand;
-* `I` - represents integer constant;
-* `r` - represents register operand
+* `+m` - 메모리 피연산자를 나타냅니다.`+`는 주어진 피연산자가 입력 및 출력 피연산자임을 나타냅니다.
+* `I` - 정수 상수를 나타냅니다.
+* `r` - 레지스터 피연산자를 나타냅니다.
 
-Besides these constraint, we also can see - the `memory` keyword which tells compiler that this code will change value in memory. That's all. Now let's look at the same function but at `atomic` variant. It looks more complex that its `non-atomic` variant:
+이 제약 조건 외에도 컴파일러가 이 코드가 메모리의 값을 변경한다는 것을 알려주는 `memory` 키워드도 볼 수 있습니다. 이게 끝입니다. 이제 동일한 기능이지만 `원자적` 변형을 살펴 보겠습니다. `비원자적` 변형보다 더 복잡해 보입니다. :
 
 ```C
 static __always_inline void
@@ -122,32 +123,32 @@ set_bit(long nr, volatile unsigned long *addr)
 }
 ```
 
-First of all note that this function takes the same set of parameters that `__set_bit`, but additionally marked with the `__always_inline` attribute. The `__always_inline` is macro which defined in the [include/linux/compiler-gcc.h](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/include/linux/compiler-gcc.h) and just expands to the `always_inline` attribute:
+우선 이 함수는 `__set_bit`와 동일한 파라미터 세트를 가지지만 추가로 `__always_inline` 속성으로 나타납니다. `__always_inline`은 [include/linux/compiler-gcc.h](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/include/linux/compiler-gcc.h)에 정의 된 매크로입니다. `always_inline` 속성으로 확장합니다 :
 
 ```C
 #define __always_inline inline __attribute__((always_inline))
 ```
 
-which means that this function will be always inlined to reduce size of the Linux kernel image. Now let's try to understand implementation of the `set_bit` function. First of all we check a given number of bit at the beginning of the `set_bit` function. The `IS_IMMEDIATE` macro defined in the same [header](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/arch/x86/include/asm/bitops.h) file and expands to the call of the builtin [gcc](https://en.wikipedia.org/wiki/GNU_Compiler_Collection) function:
+이는 Linux 커널 이미지의 크기를 줄이기 위해 이 함수가 항상 인라인됨을 의미합니다. 이제 `set_bit` 함수의 구현을 이해하려고 해봅시다. 우선 `set_bit` 함수의 시작 부분에서 주어진 비트 수를 확인합니다. 동일한 [헤더](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/arch/x86/include/asm/bitops.h) 파일에 정의 된 `IS_IMMEDIATE` 매크로는 내장 [gcc](https://en.wikipedia.org/wiki/GNU_Compiler_Collection) 함수의 호출로 확장됩니다. :
 
 ```C
 #define IS_IMMEDIATE(nr)		(__builtin_constant_p(nr))
 ```
 
-The `__builtin_constant_p` builtin function returns `1` if the given parameter is known to be constant at compile-time and returns `0` in other case. We no need to use slow `bts` instruction to set bit if the given number of bit is known in compile time constant. We can just apply [bitwise or](https://en.wikipedia.org/wiki/Bitwise_operation#OR) for byte from the give address which contains given bit and masked number of bits where high bit is `1` and other is zero. In other case if the given number of bit is not known constant at compile-time, we do the same as we did in the `__set_bit` function. The `CONST_MASK_ADDR` macro:
+`__builtin_constant_p` 내장 함수는 주어진 매개 변수가 컴파일 타임에 일정하다고 알려진 경우 `1`을 리턴하고 다른 경우 `0 `을 리턴합니다. 주어진 비트 수가 컴파일 타임 상수에 알려진 경우 비트를 설정하기 위해 느린  `bts ` 명령어를 사용할 필요가 없습니다. 주어진 비트와 마스크 된 비트 수를 포함하는 주기 주소에서 바이트에 [비트 단위 또는] 비트를 적용 할 수 있습니다. 높은 비트는 `1`이고 그 외의 비트는 0입니다. 주어진 비트 수가 컴파일 타임에 상수로 알려지지 않은 경우, 우리는 `__set_bit` 함수에서 했던 것과 동일하게 작업합니다. `CONST_MASK_ADDR` 매크로 :
 
 ```C
 #define CONST_MASK_ADDR(nr, addr)	BITOP_ADDR((void *)(addr) + ((nr)>>3))
 ```
 
-expands to the give address with offset to the byte which contains a given bit. For example we have address `0x1000` and the number of bit is `0x9`. So, as `0x9` is `one byte + one bit` our address with be `addr + 1`:
+는 주어진 비트를 포함하는 바이트에 대한 오프셋과 함께 주소로 확장합니다. 예를 들어 우리는 `0x1000` 주소를 가지고 있고 비트 수는 `0x9`입니다. 따라서 `0x9`는 `1 byte + one bit` 이므로 주소는 `addr + 1`입니다 :
 
 ```python
 >>> hex(0x1000 + (0x9 >> 3))
 '0x1001'
 ```
 
-The `CONST_MASK` macro represents our given number of bit as byte where high bit is `1` and other bits are `0`:
+`CONST_MASK` 매크로는 주어진 비트 수를 바이트로 나타내며, 높은 비트는 `1`이고 그 외의 비트는 `0`입니다. :
 
 ```C
 #define CONST_MASK(nr)			(1 << ((nr) & 7))
@@ -158,7 +159,7 @@ The `CONST_MASK` macro represents our given number of bit as byte where high bit
 '0b10'
 ```
 
-In the end we just apply bitwise `or` for these values. So, for example if our address will be `0x4097` and we need to set `0x9` bit:
+결국 우리는 이 값들에 대해 비트 단위 `or`을 적용합니다. 예를 들어 주소가 `0x4097` 이고 `0x9` 비트를 설정해야하는 경우 :
 
 ```python
 >>> bin(0x4097)
@@ -167,11 +168,11 @@ In the end we just apply bitwise `or` for these values. So, for example if our a
 '0b100010'
 ```
 
-the `ninth` bit will be set.
+`9 번째` 비트가 설정됩니다.
 
-Note that all of these operations are marked with `LOCK_PREFIX` which is expands to the [lock](http://x86.renejeschke.de/html/file_module_x86_id_159.html) instruction which guarantees atomicity of this operation.
+이러한 모든 작업에는 `LOCK_PREFIX` 가 표시되어 있으며 이 작업의 원자성을 보장하는 [lock](http://x86.renejeschke.de/html/file_module_x86_id_159.html) 명령으로 확장됩니다.
 
-As we already know, besides the `set_bit` and `__set_bit` operations, the Linux kernel provides two inverse functions to clear bit in atomic and non-atomic context. They are `clear_bit` and `__clear_bit`. Both of these functions are defined in the same [header file](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/arch/x86/include/asm/bitops.h) and takes the same set of arguments. But not only arguments are similar. Generally these functions are very similar on the `set_bit` and `__set_bit`. Let's look on the implementation of the non-atomic `__clear_bit` function:
+이미 알고 있듯이, 리눅스 커널은 `set_bit` 과 `__set_bit` 연산 외에도 원자 와 비원자 컨텍스트에서 비트를 지우는 두 가지 역함수를 제공합니다. 그것들은 `clear_bit`와 `__clear_bit` 입니다. 이 두 함수는 동일한 [헤더 파일](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/arch/x86/include/asm/bitops.h)에 정의되어 있으며 동일한 매개변수 세트를 사용합니다. 그러나 매개변수만 비슷한 것은 아닙니다. 일반적으로 이러한 함수는 `set_bit`, `__set_bit` 와 매우 유사합니다. 비원자적인 `__clear_bit` 함수의 구현을 살펴 봅시다. :
 
 ```C
 static inline void __clear_bit(long nr, volatile unsigned long *addr)
@@ -180,9 +181,9 @@ static inline void __clear_bit(long nr, volatile unsigned long *addr)
 }
 ```
 
-Yes. As we see, it takes the same set of arguments and contains very similar block of inline assembler. It just uses the [btr](http://x86.renejeschke.de/html/file_module_x86_id_24.html) instruction instead of `bts`. As we can understand form the function's name, it clears a given bit by the given address. The `btr` instruction acts like `bts`. This instruction also selects a given bit which is specified in the first operand, stores its value in the `CF` flag register and clears this bit in the given bit array which is specified with second operand.
+그렇습니다. 보시다시피, 동일한 매개변수 집합을 가지고 매우 유사한 인라인 어셈블러 블록을 포함합니다. `bts` 대신 [btr](http://x86.renejeschke.de/html/file_module_x86_id_24.html) 명령만 사용합니다. 함수 이름의 형태를 이해할 수 있으므로 주어진 주소로 주어진 비트를 지웁니다. `btr` 명령어는 `bts`와 같은 역할을 합니다. 이 명령어는 또한 첫 번째 피연산자에 지정된 주어진 비트를 선택하고, 그 값을 `CF` 플래그 레지스터에 저장하고 이 비트를 두 번째 피연산자로 지정된 주어진 비트 배열에서 지웁니다.
 
-The atomic variant of the `__clear_bit` is `clear_bit`:
+`__clear_bit` 의 원자 변형은 `clear_bit`입니다. :
 
 ```C
 static __always_inline void
@@ -200,11 +201,11 @@ clear_bit(long nr, volatile unsigned long *addr)
 }
 ```
 
-and as we can see it is very similar on `set_bit` and just contains two differences. The first difference it uses `btr` instruction to clear bit when the `set_bit` uses `bts` instruction to set bit. The second difference it uses negated mask and `and` instruction to clear bit in the given byte when the `set_bit` uses `or` instruction.
+보시다시피 `set_bit`와 매우 유사하며 두 가지 차이점만 있습니다. 첫 번째 차이점은 `set_bit`가 `bts` 명령어를 사용하여 비트를 설정할 때 `btr`명령어를 사용하여 비트를 지우는 것입니다. 두 번째 차이점은 `set_bit`가 `or` 명령어를 사용할 때 negated 마스크와 `and` 명령어를 사용하여 주어진 바이트에서 비트를 지우는 것입니다.
 
-That's all. Now we can set and clear bit in any bit array and and we can go to other operations on bitmasks.
+이제 끝입니다. 이제 비트 배열에서 비트를 설정하고 지울 수 있으며 비트 마스크에서 다른 작업을 수행 할 수 있습니다.
 
-Most widely used operations on a bit arrays are set and clear bit in a bit array in the Linux kernel. But besides this operations it is useful to do additional operations on a bit array. Yet another widely used operation in the Linux kernel - is to know is a given bit set or not in a bit array. We can achieve this with the help of the `test_bit` macro. This macro is defined in the [arch/x86/include/asm/bitops.h](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/arch/x86/include/asm/bitops.h) header file and expands to the call of the `constant_test_bit` or `variable_test_bit` depends on bit number:
+비트 어레이에서 가장 널리 사용되는 작업은 Linux 커널에서 비트 어레이의 비트가 설정되고 지워집니다. 그러나이 작업 외에도 비트 배열에서 추가 작업을 수행하는 것이 유용합니다. Linux 커널에서 널리 사용되는 또 다른 작업은 주어진 비트 세트가 비트 배열인지 아는 것입니다. 우리는 `test_bit` 매크로의 도움으로 이것을 달성 할 수 있습니다. 이 매크로는 [arch/x86/include/asm/bitops.h](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/arch/x86/include/asm/bitops.h) 헤더 파일에 정의되어 있습니다. 비트 번호에 따라 `constant_test_bit` 또는 `variable_test_bit`의 호출로 확장됩니다. :
 
 ```C
 #define test_bit(nr, addr)			\
@@ -213,7 +214,7 @@ Most widely used operations on a bit arrays are set and clear bit in a bit array
 	 : variable_test_bit((nr), (addr)))
 ```
 
-So, if the `nr` is known in compile time constant, the `test_bit` will be expanded to the call of the `constant_test_bit` function or `variable_test_bit` in other case. Now let's look at implementations of these functions. Let's start from the `variable_test_bit`:
+따라서 컴파일 타임 상수에서 `nr`이 알려진 경우, `test_bit`는 `constant_test_bit` 함수 또는 `variable_test_bit`의 호출로 확장됩니다. 이제 이러한 함수의 구현을 살펴 보겠습니다. `variable_test_bit`부터 시작하겠습니다 :
 
 ```C
 static inline int variable_test_bit(long nr, volatile const unsigned long *addr)
@@ -223,15 +224,15 @@ static inline int variable_test_bit(long nr, volatile const unsigned long *addr)
 	asm volatile("bt %2,%1\n\t"
 		     "sbb %0,%0"
 		     : "=r" (oldbit)
-		     : "m" (*(unsigned long *)addr), "Ir" (nr));
+		     : "m" (* (unsigned long * )addr), "Ir" (nr));
 
 	return oldbit;
 }
 ```
 
-The `variable_test_bit` function takes similar set of arguments as `set_bit` and other function take. We also may see inline assembly code here which executes [bt](http://x86.renejeschke.de/html/file_module_x86_id_22.html) and [sbb](http://x86.renejeschke.de/html/file_module_x86_id_286.html) instruction. The `bt` or `bit test` instruction selects a given bit which is specified with first operand from the bit array which is specified with the second operand and stores its value in the [CF](https://en.wikipedia.org/wiki/FLAGS_register) bit of flags register. The second `sbb` instruction subtracts first operand from second and subtracts value of the `CF`. So, here write a value of a given bit number from a given bit array to the `CF` bit of flags register and execute `sbb` instruction which calculates: `00000000 - CF` and writes the result to the `oldbit`.
+`variable_test_bit` 함수는 `set_bit` 와 다른 함수가 가지는 것과 비슷한 매개변수 세트를 취합니다. 또한 [bt](http://x86.renejeschke.de/html/file_module_x86_id_22.html) 와 [sbb](http://x86.renejeschke.de/html/file_module_x86_id_286.html) 명령을 실행하는 인라인 어셈블리 코드를 볼 수 있습니다. `bt` 또는 `bit test` 명령은 두 번째 피연산자로 지정된 비트 배열에서 첫 번째 피연산자로 지정된 주어진 비트를 선택하고 그 값을 플래그 레지스터의 [CF](https://en.wikipedia.org) 비트에 저장합니다. 두 번째 `sbb` 명령어는 두 번째 피연산자에서 첫 번째 피연산자를 빼고 `CF`의 값을 뺍니다. 따라서 여기에서 주어진 비트 배열의 값을 플래그 레지스터의 `CF` 비트에 기록하고 `sbb` 명령을 실행하여 `00000000-CF`를 계산하고 그 결과를 `oldbit`에 기록합니다.
 
-The `constant_test_bit` function does the same as we saw in the `set_bit`:
+`constant_test_bit` 함수는 `set_bit`에서 본 것과 동일합니다 :
 
 ```C
 static __always_inline int constant_test_bit(long nr, const volatile unsigned long *addr)
@@ -241,14 +242,14 @@ static __always_inline int constant_test_bit(long nr, const volatile unsigned lo
 }
 ```
 
-It generates a byte where high bit is `1` and other bits are `0` (as we saw in `CONST_MASK`) and applies bitwise [and](https://en.wikipedia.org/wiki/Bitwise_operation#AND) to the byte which contains a given bit number.
+이는 높은 비트가 `1`이고 그 외의 비트가 `0`인 바이트를 생성하고 ( `CONST_MASK`에서 보았듯이 ) 주어진 비트 수를 포함하는 바이트에 비트 단위 [and](https://en.wikipedia.org/wiki/Bitwise_operation#AND)를 적용합니다.
 
-The next widely used bit array related operation is to change bit in a bit array. The Linux kernel provides two helper for this:
+다음으로 널리 사용되는 비트 배열 관련 작업은 비트 배열에서 비트를 변경하는 것입니다. Linux 커널은 이를 위해 두 가지 헬퍼를 제공합니다. :
 
 * `__change_bit`;
 * `change_bit`.
 
-As you already can guess, these two variants are atomic and non-atomic as for example `set_bit` and `__set_bit`. For the start, let's look at the implementation of the `__change_bit` function:
+이미 짐작할 수 있듯이 이 두 변형은 `set_bit` 와 `__set_bit`와 같이 원자적이고 비원자적입니다. 시작하기 위해, `__change_bit` 함수의 구현을 먼저 봅시다.:
 
 ```C
 static inline void __change_bit(long nr, volatile unsigned long *addr)
@@ -257,7 +258,8 @@ static inline void __change_bit(long nr, volatile unsigned long *addr)
 }
 ```
 
-Pretty easy, is not it? The implementation of the `__change_bit` is the same as `__set_bit`, but instead of `bts` instruction, we are using [btc](http://x86.renejeschke.de/html/file_module_x86_id_23.html). This instruction selects a given bit from a given bit array, stores its value in the `CF` and changes its value by the applying of complement operation. So, a bit with value `1` will be `0` and vice versa:
+꽤 쉽지않나요?  `__change_bit`의 구현은 `__set_bit`와 동일하지만 `bts` 명령 대신 [btc](http://x86.renejeschke.de/html/file_module_x86_id_23.html)를 사용하고 있습니다. 이 명령어는 주어진 비트 배열에서 주어진 비트를 선택하고, 그 값을 `CF`에 저장하고 보수 연산을 적용하여 그 값을 변경합니다. 따라서 값이 `1`인 비트는 `0`이 되고 그 반대의 경우도 마찬가지로 진행됩니다.
+
 
 ```python
 >>> int(not 1)
@@ -266,7 +268,7 @@ Pretty easy, is not it? The implementation of the `__change_bit` is the same as 
 1
 ```
 
-The atomic version of the `__change_bit` is the `change_bit` function:
+`__change_bit`의 원자 버전은 `change_bit` 함수입니다. :
 
 ```C
 static inline void change_bit(long nr, volatile unsigned long *addr)
@@ -283,23 +285,23 @@ static inline void change_bit(long nr, volatile unsigned long *addr)
 }
 ```
 
-It is similar on `set_bit` function, but also has two differences. The first difference is `xor` operation instead of `or` and the second is `btc` instead of `bts`.
+`set_bit` 함수와 비슷하지만 두 가지 차이점이 있습니다. 첫 번째 차이점은 `or` 대신 `xor` 연산을 사용한다는 것이고, 두 번째 차이점은 `bts` 대신 `btc`을 사용한다는 것 입니다.
 
-For this moment we know the most important architecture-specific operations with bit arrays. Time to look at generic bitmap API.
+현재로서는 비트 배열을 사용하는 가장 중요한 아키텍처 별 작업을 알고 있습니다. 일반적인 비트 맵 API를 살펴볼 시간입니다.
 
-Common bit operations
+일반적인 비트 연산
 ================================================================================
 
-Besides the architecture-specific API from the [arch/x86/include/asm/bitops.h](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/arch/x86/include/asm/bitops.h) header file, the Linux kernel provides common API for manipulation of bit arrays. As we know from the beginning of this part, we can find it in the  [include/linux/bitmap.h](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/include/linux/bitmap.h) header file and additionally in the * [lib/bitmap.c](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/lib/bitmap.c)  source code file. But before these source code files let's look into the [include/linux/bitops.h](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/include/linux/bitops.h) header file which provides a set of useful macro. Let's look on some of they.
+[arch/x86/include/asm/bitops.h](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/arch/x86/include/asm/bitops.h) 헤더 파일의 아키텍처 별 API 외에 Linux 커널은 비트 배열 조작을 위한 공통 API를 제공합니다. 이 파트의 시작 부분에서 알 수 있듯이 [include/linux/bitmap.h](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/include/linux/bitmap.h) 헤더 파일과 * [lib/bitmap.c](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/lib/bitmap.c) 소스 코드 파일에서 찾을 수 있습니다. 그러나 이 소스 코드 파일들 전에 유용한 매크로 세트를 제공하는 [include/linux/bitops.h](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/include/linux/bitops.h) 헤더 파일을 살펴 보자. 그들 중 일부를 봅시다.
 
-First of all let's look at following four macros:
+우선 다음 네 가지 매크로를 살펴 보겠습니다. :
 
 * `for_each_set_bit`
 * `for_each_set_bit_from`
 * `for_each_clear_bit`
 * `for_each_clear_bit_from`
 
-All of these macros provide iterator over certain set of bits in a bit array. The first macro iterates over bits which are set, the second does the same, but starts from a certain bits. The last two macros do the same, but iterates over clear bits. Let's look on implementation of the `for_each_set_bit` macro:
+이러한 모든 매크로는 비트 배열의 특정 비트 집합에 대해 반복자를 제공합니다. 첫 번째 매크로는 설정된 비트를 반복하고, 두 번째 매크로도 동일하지만 특정 비트에서 시작합니다. 마지막 두 매크로는 동일하지만 명확한 비트를 반복합니다. `for_each_set_bit` 매크로의 구현을 살펴 봅시다. :
 
 ```C
 #define for_each_set_bit(bit, addr, size) \
@@ -308,16 +310,17 @@ All of these macros provide iterator over certain set of bits in a bit array. Th
 	     (bit) = find_next_bit((addr), (size), (bit) + 1))
 ```
 
-As we may see it takes three arguments and expands to the loop from first set bit which is returned as result of the `find_first_bit` function and to the last bit number while it is less than given size.
+보시다시피, 세 개의 매개변수를 취하여 첫 번째 비트 세트에서 루프로 확장되는데, 이는 `find_first_bit` 함수의 결과로 반환되고 주어진 크기보다 작으면 마지막 비트 수로 확장됩니다.
 
-Besides these four macros, the [arch/x86/include/asm/bitops.h](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/arch/x86/include/asm/bitops.h) provides API for rotation of `64-bit` or `32-bit` values and etc.
+이 4가지 매크로 외에도 [arch/x86/include/asm/bitops.h](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/arch/x86/include/asm/bitops.h)는 `64 비트` 또는 `32 비트`값 등의 회전을 위한 API를 제공합니다.
 
-The next [header](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/include/linux/bitmap.h) file which provides API for manipulation with a bit arrays. For example it provides two functions:
+비트 배열로 조작하기위한 API를 제공하는 다음 [헤더](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/include/linux/bitmap.h) 파일입니다. 예를 들어 두 가지 함수를 제공합니다. :
+
 
 * `bitmap_zero`;
 * `bitmap_fill`.
 
-To clear a bit array and fill it with `1`. Let's look on the implementation of the `bitmap_zero` function:
+비트 배열을 지우고 `1`로 채웁니다. `bitmap_zero`함수의 구현을 살펴 봅시다. :
 
 ```C
 static inline void bitmap_zero(unsigned long *dst, unsigned int nbits)
@@ -331,16 +334,16 @@ static inline void bitmap_zero(unsigned long *dst, unsigned int nbits)
 }
 ```
 
-First of all we can see the check for `nbits`. The `small_const_nbits` is macro which defined in the same header [file](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/include/linux/bitmap.h) and looks:
+우선 우리는 `nbits`에 대한 확인을 볼 수 있습니다. `small_const_nbits`는 동일한 헤더 [파일](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/include/linux/bitmap.h)에 정의 된 매크로이며 다음과 같습니다. :
 
 ```C
 #define small_const_nbits(nbits) \
 	(__builtin_constant_p(nbits) && (nbits) <= BITS_PER_LONG)
 ```
 
-As we may see it checks that `nbits` is known constant in compile time and `nbits` value does not overflow `BITS_PER_LONG` or `64`. If bits number does not overflow amount of bits in a `long` value we can just set to zero. In other case we need to calculate how many `long` values do we need to fill our bit array and fill it with [memset](http://man7.org/linux/man-pages/man3/memset.3.html).
+보시다시피 `nbits`는 컴파일 타임에 상수로 알려져 있으며 `nbits` 값은 `BITS_PER_LONG` 또는 `64`을 넘기지 않습니다. 만약 비트 숫자가 `long`값에서 비트의 크기를 오버플로하지 않으면 우리는 단순히 0으로 설정할 수 있습니다. 그렇지 않은 경우에는 비트 배열을 채우고 [memset](http://man7.org/linux/man-pages/man3/memset.3.html)으로 채우는 데 필요한 `long`값의 수를 계산해야합니다.
 
-The implementation of the `bitmap_fill` function is similar on implementation of the `biramp_zero` function, except we fill a given bit array with `0xff` values or `0b11111111`:
+`bitmap_fill` 함수의 구현은 주어진 비트 배열을 '0xff'값 또는 '0b11111111'로 채우는 것을 제외하고는 'biramp_zero'함수의 구현과 유사합니다.
 
 ```C
 static inline void bitmap_fill(unsigned long *dst, unsigned int nbits)
@@ -354,16 +357,16 @@ static inline void bitmap_fill(unsigned long *dst, unsigned int nbits)
 }
 ```
 
-Besides the `bitmap_fill` and `bitmap_zero` functions, the [include/linux/bitmap.h](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/include/linux/bitmap.h) header file provides `bitmap_copy` which is similar on the `bitmap_zero`, but just uses [memcpy](http://man7.org/linux/man-pages/man3/memcpy.3.html) instead of [memset](http://man7.org/linux/man-pages/man3/memset.3.html). Also it provides bitwise operations for bit array like `bitmap_and`, `bitmap_or`, `bitamp_xor` and etc. We will not consider implementation of these functions because it is easy to understand implementations of these functions if you understood all from this part. Anyway if you are interested how did these function implemented, you may open [include/linux/bitmap.h](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/include/linux/bitmap.h) header file and start to research.
+`bitmap_fill`와 `bitmap_zero`함수 외에도 [include/linux/bitmap.h](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/include/linux/bitmap.h) 헤더 파일은 `bitmap_zero`와 비슷한 `bitmap_copy`를 제공하지만 [memset](http://man7.org/linux/man-pages/man3/memset.3.html) 대신 [memcpy](http://man7.org/linux/man-pages/man3/memcpy.3.html)를 사용합니다. 또한 `bitmap_and`, `bitmap_or`, `bitamp_xor` 등과 같은 비트 배열에 대한 비트 단위 연산을 제공합니다. 이 부분을 모두 이해하면 이러한 함수의 구현을 이해하기 쉽기 때문에 이러한 함수의 구현을 고려하지 않을 것입니다. 어쨌든 이 함수들이 어떻게 구현되었는지에 관심이 있다면 [include/linux/bitmap.h](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/include/linux/bitmap.h) 헤더 파일을 열고 공부를 시작할 수 있습니다.
 
-That's all.
+이제 끝입니다.
 
 Links
 ================================================================================
 
 * [bitmap](https://en.wikipedia.org/wiki/Bit_array)
 * [linked data structures](https://en.wikipedia.org/wiki/Linked_data_structure)
-* [tree data structures](https://en.wikipedia.org/wiki/Tree_%28data_structure%29) 
+* [tree data structures](https://en.wikipedia.org/wiki/Tree_%28data_structure%29)
 * [hot-plug](https://www.kernel.org/doc/Documentation/cpu-hotplug.txt)
 * [cpumasks](https://0xax.gitbooks.io/linux-insides/content/Concepts/linux-cpu-2.html)
 * [IRQs](https://en.wikipedia.org/wiki/Interrupt_request_%28PC_architecture%29)
@@ -377,7 +380,7 @@ Links
 * [bt instruction](http://x86.renejeschke.de/html/file_module_x86_id_22.html)
 * [sbb instruction](http://x86.renejeschke.de/html/file_module_x86_id_286.html)
 * [btc instruction](http://x86.renejeschke.de/html/file_module_x86_id_23.html)
-* [man memcpy](http://man7.org/linux/man-pages/man3/memcpy.3.html) 
+* [man memcpy](http://man7.org/linux/man-pages/man3/memcpy.3.html)
 * [man memset](http://man7.org/linux/man-pages/man3/memset.3.html)
 * [CF](https://en.wikipedia.org/wiki/FLAGS_register)
 * [inline assembler](https://en.wikipedia.org/wiki/Inline_assembler)
