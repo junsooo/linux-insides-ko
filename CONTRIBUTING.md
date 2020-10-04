@@ -5,7 +5,7 @@
 
 1. 레포지토리 오른쪽 상단의 fork 버튼을 눌러주세요.
 
-    ![fork](http://oi58.tinypic.com/jj2trm.jpg)
+    ![fork](https://docs.github.com/assets/images/help/repository/fork_button.jpg)
 
 2. 본인의 계정으로 레포지토리를 clone 해주세요.
 
