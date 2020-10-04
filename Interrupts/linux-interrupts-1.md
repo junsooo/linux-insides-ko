@@ -4,7 +4,7 @@ Interrupts and Interrupt Handling. Part 1.
 Introduction
 --------------------------------------------------------------------------------
 
-이번 챕터는 [linux insdes](https://0xax.gitbooks.io/linux-insides/content/)책의 새로운 챕터의 첫 부분입니다. 이전 챕터에서 많은 것을 보았습니다. 우리는 커널 초기화의 가장 첫 [과정](https://0xax.gitbooks.io/linux-insides/content/Initialization/linux-initializ    ation-1.html) of kernel initialization and finished with the [launch](https://0xax.gitbooks.io/linux-insides/content/Initialization/linux-initialization-10.html)으로 시작해서 첫 프로세스인 `init`의 [시작](https://0xax.gitbooks.io/linux-insides/content/Initialization/linux-initialization-10.html)으로 이전 챕터를 끝마쳤습니다. 네, 우리는 다양한 커널의 서브시스템에 관련된 몇몇의 초기화 과정들을 지켜봤습니다. 그러나 우리는 아직 이러한 서브시스템들을 심층적으로 보지 못했습니다. 이번 챕터에서, 우리는 다양한 커널 서브시스템들이 어떻게 작동하는지 이해할 것이고, 그것들이 어떻게 구현되어있는지 살펴볼 것 입니다. 챕터의 제목으로부터 이미 유추할 수 있듯이, 첫 서브시스템은 [Interrupt](http://en.wikipedia.org/wiki/Interrupt)입니다. 
+이번 챕터는 [linux insides](https://0xax.gitbooks.io/linux-insides/content/)책의 새로운 챕터의 첫 부분입니다. 이전 챕터에서 많은 것을 보았습니다. 우리는 커널 초기화의 가장 첫 [과정](https://0xax.gitbooks.io/linux-insides/content/Initialization/linux-initialization-1.html) of kernel initialization and finished with the [launch](https://0xax.gitbooks.io/linux-insides/content/Initialization/linux-initialization-10.html)으로 시작해서 첫 프로세스인 `init`의 [시작](https://0xax.gitbooks.io/linux-insides/content/Initialization/linux-initialization-10.html)으로 이전 챕터를 끝마쳤습니다. 네, 우리는 다양한 커널의 서브시스템에 관련된 몇몇의 초기화 과정들을 지켜봤습니다. 그러나 우리는 아직 이러한 서브시스템들을 심층적으로 보지 못했습니다. 이번 챕터에서, 우리는 다양한 커널 서브시스템들이 어떻게 작동하는지 이해할 것이고, 그것들이 어떻게 구현되어있는지 살펴볼 것 입니다. 챕터의 제목으로부터 이미 유추할 수 있듯이, 첫 서브시스템은 [Interrupt](http://en.wikipedia.org/wiki/Interrupt)입니다. 
 
 Interrupt란 무엇인가?
 --------------------------------------------------------------------------------
