@@ -30,10 +30,10 @@ Queued Spinlocks
 
 Queued spinlock 과 그 [API](https://en.wikipedia.org/wiki/Application_programming_interface) 가 어떻게 구현되어 있는지 알아보기 전에, 이론적 부분을 먼저 들여다 보겠습니다.
 
-Introduction to queued spinlocks
+Queued spinlock 에 대한 소개
 -------------------------------------------------------------------------------
 
-Queued spinlocks is a [locking mechanism](https://en.wikipedia.org/wiki/Lock_%28computer_science%29) in the Linux kernel which is replacement for the standard `spinlocks`. At least this is true for the [x86_64](https://en.wikipedia.org/wiki/X86-64) architecture. If we will look at the following kernel configuration file - [kernel/Kconfig.locks](https://github.com/torvalds/linux/blob/master/kernel/Kconfig.locks), we will see following configuration entries:
+Queued spinlock 은 리눅스 커널의 [락킹 메커니즘](https://en.wikipedia.org/wiki/Lock_%28computer_science%29) 으로 표준적 `spinlock` 의 대체품입니다. 이는 적어도 [x86_64](https://en.wikipedia.org/wiki/X86-64) 아키텍쳐에 대해서는 사실입니다. 다음 커널 설정 파일 - [kernel/Kconfig.locks](https://github.com/torvalds/linux/blob/master/kernel/Kconfig.lock_64) 을 보면, 아래와 같은 설정 항목을 볼 수 있습니다:
 
 ```
 config ARCH_USE_QUEUED_SPINLOCKS
@@ -44,7 +44,7 @@ config QUEUED_SPINLOCKS
 	depends on SMP
 ```
 
-This means that the `CONFIG_QUEUED_SPINLOCKS` kernel configuration option will be enabled by default if the `ARCH_USE_QUEUED_SPINLOCKS` is enabled. We may see that the `ARCH_USE_QUEUED_SPINLOCKS` is enabled by default in the `x86_64` specific kernel configuration file - [arch/x86/Kconfig](https://github.com/torvalds/linux/blob/master/arch/x86/Kconfig):
+이는 `ARCH_USE_QUEUED_SPINLOCKS` 이 활성화 되어 있다면, `CONFIG_QUEUED_SPINLOCKS` 커널 설정 옵션이 활성화 될것임을 의미합니다. `x86_64` 를 위한 커널 설정 파일 - [arch/x86/Kconfig](https://github.com/torvalds/linux/blob/master/arch/x86/Kconfig) 에서 `ARCH_USE_QUEUED_SPINLOCKS` 이 기본으로 활성화 되어 있음을 볼 수 있습니다:
 
 ```
 config X86
@@ -57,7 +57,7 @@ config X86
     ...
 ```
 
-Before we start to consider what queued spinlock concept is, let's look on other types of `spinlocks`. For the start let's consider how `normal` spinlocks is implemented. Usually, implementation of `normal` spinlock is based on the [test and set](https://en.wikipedia.org/wiki/Test-and-set) instruction. Principle of work of this instruction is pretty simple. This instruction writes a value to the memory location and returns old value from there. Both of these instructions are in atomic context i.e. non-interruptible instructions. So if the first thread started to execute this instruction, second thread will wait until the first processor finishes its instruction. Basic lock can be built on top of this mechanism. Schematically it may look like this:
+Queued spinlock 의 개념을 보기 전에, `spinlock` 타입들을 봅시다. 먼저 어떻게 `평범한` spinlock 이 구현되는지 생각해 봅시다. 보통, `평범한` spinlock 의 구현은 [test and set](https://en.wikipedia.org/wiki/Test-and-set) 명령에 기반합니다. 이 명령이 하는 일은 상당히 간단합니다. 이 명령은 메모리의 특정 위치에 값을 쓰고 그 위치에 쓰여있던 기존 값을 리턴합니다. 이 두개의 일은 원자적으로 이루어집니다, 즉 인터럽트 받지 않는 명령입니다. 따라서 첫번째 쓰레드가 이 명령을 수행하기 시작했다면, 두번째 쓰레드는 첫번째 프로세서가 이 명령을 마무리할 때까지 기다립니다. 이 메커니즘 위에서 기본 락이 만들어집니다. 개요적으로는 아래와 같을 겁니다:
 
 ```C
 int lock(lock)
@@ -75,17 +75,17 @@ int unlock(lock)
 }
 ```
 
-The first thread will execute the `test_and_set` which will set the `lock` to `1`. When the second thread calls the `lock` function, it will spin in the `while` loop, until the first thread call the `unlock` function and the `lock` will be equal to `0`. This implementation is not very good for performance, because it has at least two problems. The first problem is that this implementation may be unfair and the thread from one processor may have long waiting time, even if it called the `lock` before other threads which are waiting for free lock too. The second problem is that all threads which want to acquire a lock, must to execute many `atomic` operations like `test_and_set` on a variable which is in shared memory. This leads to the cache invalidation as the cache of the processor will store `lock=1`, but the value of the `lock` in memory may be `1` after a thread will release this lock.
+첫번째 쓰레드는 `lock` 을 `1` 로 설정하는 `test_and_set` 을 수행할 겁니다. 두번째 쓰레드가 `lock` 함수를 호출했을 때는, 첫번째 쓰레드가 `unlock` 함수를 호출하고 `lock` 이 `0` 이 될때까지 `while` 루프를 반복할 겁니다. 이 구현은 성능에 크게 좋지는 않은데, 두가지 문제가 있기 때문입니다. 첫번째 문제는 이 구현이 불공평할 수 있고 한 프로세서의 쓰레드가 락이 풀리길 기다리는 다른 쓰레드보다 먼저 `lock` 을 호출했다 해도 긴 대기 시간을 가질 수 있다는 것입니다. 두번째 문제는 락을 잡고자 하는 모든 쓰레드가 공유 메모리에 있는 변수에 `test_and_set` 과 같은 `atomic` 오퍼레이션을 많이 수행해야 한다는 겁니다. 이는 프로세서의 캐시가 `lock=1` 을 저장하기 하므로 캐시 무효화를 일으키게 되지만, 메모리 상의 `lock` 은 이 쓰레드가 이 락을 놓은 후에 `1` 일 수 있습니다.
 
-The topic of this part is `queued spinlocks`. This approach may help to solve both of these problems. The `queued spinlocks` allows each processor to use its own memory location to spin. The basic principle of a queue-based spinlock can best be understood by studying a classic queue-based spinlock implementation called the [MCS](http://www.cs.rochester.edu/~scott/papers/1991_TOCS_synch.pdf) lock. Before we look at implementation of the `queued spinlocks` in the Linux kernel, we will try to understand how `MCS` lock works.
+이 파트의 주제는 `queued spinlock` 입니다. 이 접근법은 이 두 문제를 모두 해결할 수도 있습니다. `queued spinlock` 은 각 프로세서가 각자의 메모리 위치에서 기다릴 수 있게 합니다. Queue-based spinlock 의 기본 개념은 [MCS](http://www.cs.rochester.edu/~scott/papers/1991_TOCS_synch.pdf) 라고 불리는 고전적 quque-based spinlock 구현을 공부함으로써 가장 잘 이해될 수 있습니다. 리눅스 커널의 `queued spinlock` 구현을 보기에 앞서, `MCS` 락이 어떻게 동작하는지 이해해 봅시다.
 
-The basic idea of the `MCS` lock is in that as I already wrote in the previous paragraph, a thread spins on a local variable and each processor in the system has its own copy of these variable. In other words this concept is built on top of the [per-cpu](https://0xax.gitbooks.io/linux-insides/content/Concepts/linux-cpu-1.html) variables concept in the Linux kernel.
+`MCS` 락의 기본 아이디어는 앞의 문단에서 적은 바와 같습니다, 쓰레드는 지역 변수를 반복적으로 기다리며 시스템의 각 프로세서가 이 변수의 복사본을 각자 갖습니다. 달리 말하면 이 컨셉은 리눅스 커널의 [per-cpu](https://0xax.gitbooks.io/linux-insides/content/Concepts/linux-cpu-1.html) 변수 컨셉에 기반합니다.
 
-When the first thread wants to acquire a lock, it registers itself in the `queue` or in other words it will be added to the special `queue` and will acquire lock, because it is free for now. When the second thread want to acquire the same lock before the first thread release it, this thread adds its own copy of the lock variable into this `queue`. In this case the first thread will contain a `next` field which will point to the second thread. From this moment, the second thread will wait until the first thread release its lock and notify `next` thread about this event. The first thread will be deleted from the `queue` and the second thread will be owner of a lock.
+첫번째 쓰레드가 락을 획득하고자 하면, 이 쓰레드는 스스로를 `queue` 에 등록합니다. 달리 말하면 특수한 `queue` 에 등록되고 나서 락을 획득합니다, 이 락은 지금은 열려 있으니까요. 첫번째 쓰레드가 이 락을 놓기 전에 두번째 쓰레드가 같은 락을 얻고자 한다면, 이 쓰레드는 이 락 변수의 복사본을 이 `queue` 에 넣습니다. 이 경우 첫번째 쓰레드는 두번째 쓰레드를 가리키는 `next` 필드를 가지고 있을 겁니다. 이 순간, 두번째 쓰레드는 첫번째 쓰레드가 자신의 락을 놓고 `next` 쓰레드에게 이를 알릴 때까지 기다립니다. 첫번째 쓰레드는 `queue` 에서 지워지고 두번째 쓰레드가 락을 얻게 됩니다.
 
-Schematically we can represent it like:
+개요적으로는 이렇게 나타낼 수 있습니다:
 
-Empty queue:
+빈 queue:
 
 ```
 +---------+
@@ -95,27 +95,27 @@ Empty queue:
 +---------+
 ```
 
-First thread tries to acquire a lock:
+첫번째 쓰레드가 락을 잡으려 함:
 
 ```
-+---------+     +----------------------------+
-|         |     |                            |
-|  Queue  |---->| First thread acquired lock |
-|         |     |                            |
-+---------+     +----------------------------+
++---------+     +---------------------------+
+|         |     |                           |
+|  Queue  |---->| 첫번째 쓰레드가 락을 잡음 |
+|         |     |                           |
++---------+     +---------------------------+
 ```
 
-Second thread tries to acquire a lock:
+두번째 쓰레드가 락을 잡으려 함:
 
 ```
-+---------+     +----------------------------------------+     +-------------------------+
-|         |     |                                        |     |                         |
-|  Queue  |---->|  Second thread waits for first thread  |<----| First thread holds lock |
-|         |     |                                        |     |                         |
-+---------+     +----------------------------------------+     +-------------------------+
++---------+     +------------------------------------------+     +---------------------------+
+|         |     |                                          |     |                           |
+|  Queue  |---->|  두번째 쓰레드가 첫번째 쓰레드를 기다림  |<----| 첫번째 쓰레드가 락을 잡음 |
+|         |     |                                          |     |                           |
++---------+     +------------------------------------------+     +---------------------------+
 ```
 
-Or the pseudocode:
+또는 수도코드로는:
 
 ```C
 void lock(...)
@@ -123,8 +123,7 @@ void lock(...)
     lock.next = NULL;
     ancestor = put_lock_to_queue_and_return_ancestor(queue, lock);
 
-    // if we have ancestor, the lock already acquired and we
-    // need to wait until it is released
+    // 앞선 존재가 있었다면, 락은 이미 잡혀있고 우린 그게 놓아질 때까지 기다림
     if (ancestor)
     {
         lock.is_locked = 1;
@@ -134,26 +133,23 @@ void lock(...)
             ;
     }
 
-    // in other way we are owner of the lock and may exit
+    // 아니라면 우리가 락을 잡고 여기서 나감
 }
 
 void unlock(...)
 {
-    // do we need to notify somebody or we are alone in the
-    // queue?
+    // 우리가 queue 에 혼자 있나, 아니면 누군가에게 알림을 줘야하나?
     if (lock.next != NULL) {
-        // the while loop from the lock() function will be
-        // finished
+        // lock() 함수에서의 루프가 종료되게 함
         lock.next.is_locked = false;
     }
 
-    // So, we have no next threads in the queue to notify about
-    // lock releasing event. Let's just put `0` to the lock, will
-    // delete ourself from the queue and exit.
+    // 이제, 락을 놓았음을 알려줘야 할 다음 쓰레드가 queue 에 없음. 락에 `0` 을
+    // 넣고 queue 에서 우릴 제거한 후 나감.
 }
 ```
 
-That's all about theory of the `queued spinlocks`, now let's consider how this mechanism is implemented in the Linux kernel. Unlike above pseudocode, the implementation of the `queued spinlocks` looks complex and tangled. But the study with attention will lead to success.
+이게 `queued spinlock` 에 대한 이론의 전부입니다, 이제 이 메커니즘이 리눅스 커널에 어떻게 구현되어 있는지 알아봅시다. 앞의 수도코드와 달리, `queued spinlock` 의 구현은 복잡하고 이리저리 얽혀있습니다. 하지만 주의 깊게 공부해 보면 될 겁니다.
 
 API of queued spinlocks
 -------------------------------------------------------------------------------
