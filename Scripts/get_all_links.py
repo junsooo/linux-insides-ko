@@ -22,6 +22,12 @@ except ImportError:
     from urllib.error import URLError
 
 def check_live_url(url):
+    """
+    Check the given url to see if there.
+
+    Args:
+        url: (str): write your description
+    """
 
     result = False
     try:
@@ -40,6 +46,12 @@ def check_live_url(url):
 
 
 def main(path):
+    """
+    Main function.
+
+    Args:
+        path: (str): write your description
+    """
 
     filenames = []
     for (dirpath, dnames, fnames) in os.walk(path):
