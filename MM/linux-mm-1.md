@@ -4,16 +4,16 @@
 소개
 --------------------------------------------------------------------------------
 
-메모리 관리는 운영체제에서 어려운 부분 중에 하나이다 (나는 제일 어려운 부분이라 생각한다). [커널 엔트리 포인트로 가기 전에 마지막 준비 작업](https://0xax.gitbooks.io/linux-insides/content/Initialization/linux-initialization-3.html) 에서는 `start_kernel` 함수 직전까지 설명하였다. 이 함수는 커널이 `init` 프로세스가 동작하기 전에, 커널의 모든 기능(아키택쳐 의존적인 기능까지 포함)을 초기화한다. 커널은 early page table, fixmap page table 그리고 identity page table을 만든다. 아직 복작한 메모리 관리는 들어가지 않았다. `start_kernel` 함수를 본격적으로 보기 시작하면 메모리 관리를 위한 복잡한 자료구조와 테크닉들을 보게 될 것이다. 커널의 초기화 과정을 좀 더 잘 이해하기 위해서는 이러한 테크닉에 대해서 명확히 이해할 필요가 있다. 이 챕터는 리눅스 `memblock`을 시작으로, 커널의 메모리 관리에 있어서 다양한 프레임워크나 API들에 대해서 알아볼 것이다.
+메모리 관리는 운영체제에서 어려운 부분 중에 하나입니다 (저는 제일 어려운 부분이라 생각합니다). [커널 엔트리 포인트로 가기 전에 마지막 준비 작업](https://0xax.gitbooks.io/linux-insides/content/Initialization/linux-initialization-3.html) 에서는 `start_kernel` 함수 직전까지 설명하였습니다. 이 함수는 커널이 `init` 프로세스가 동작하기 전에, 커널의 모든 기능(아키텍쳐 의존적인 기능까지 포함)을 초기화합니다. 커널은 early page table, fixmap page table 그리고 identity page table을 만듭니다. 아직 복잡한 메모리 관리는 들어가지 않았습니다. `start_kernel` 함수를 본격적으로 보기 시작하면 메모리 관리를 위한 복잡한 자료구조와 테크닉들을 보게 될 것입니다. 커널의 초기화 과정을 좀 더 잘 이해하기 위해서는 이러한 테크닉에 대해서 명확히 이해할 필요가 있습니다. 이 챕터는 리눅스 `memblock`을 시작으로, 커널의 메모리 관리에 있어서 다양한 프레임워크나 API들에 대해서 알아볼 것입니다.
 
 Memblock
 --------------------------------------------------------------------------------
 
-Memblock은 초기 부팅 단계에서 커널의 메모리 할당자가 초기화가 되지 않아 제대로 동작하기 전에, 메모리를 관리하는 방법 중 하나이다. 원래는 `Logical Memory Block`이라는 이름으로 사용되었으나, Yinghai Lu 라는 사람이 만든 [패치](https://lkml.org/lkml/2010/7/13/68) 이후에 `memblock`으로 변경되었다. `x86_64` 아케택쳐를 사용하는 커널이 `memblock`를 사용하기에 [커널 엔트리 포인트로 가기 전에 마지막 준비 작업](https://0xax.gitbooks.io/linux-insides/content/Initialization/linux-initialization-3.html)에서 봤던 적이 있다. 이번에는 어떻게 구현되어있는지 알아보겠다.
+Memblock은 초기 부팅 단계에서 커널의 메모리 할당자가 초기화가 되지 않아 제대로 동작하기 전에, 메모리를 관리하는 방법 중 하나입니다. 원래는 `Logical Memory Block`이라는 이름으로 사용되었으나, Yinghai Lu 라는 사람이 만든 [패치](https://lkml.org/lkml/2010/7/13/68) 이후에 `memblock`으로 변경되었습니다. `x86_64` 아케텍쳐를 사용하는 커널이 `memblock`를 사용하기에 [커널 엔트리 포인트로 가기 전에 마지막 준비 작업](https://0xax.gitbooks.io/linux-insides/content/Initialization/linux-initialization-3.html)에서 봤던 적이 있습니다. 이번에는 어떻게 구현되어있는지 알아보겠습니다.
 
-먼저 `memblock`를 자료구조 입장에서 시작해보겠다. 논리 메모리 블락 관련 자료구조는 [include/linux/memblock.h](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/include/linux/memblock.h)헤더 파일에 정의되어 있다.
+먼저 `memblock`를 자료구조 입장에서 시작해보겠습니다. 논리 메모리 블락 관련 자료구조는 [include/linux/memblock.h](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/include/linux/memblock.h)헤더 파일에 정의되어 있습니다.
 
-첫 번째 자료구조는 `memblock`이라는 이름 그대로 구조체가 정의되어 있다:
+첫 번째 자료구조는 `memblock`이라는 이름 그대로 구조체가 정의되어 있습니다:
 
 ```C
 struct memblock {
@@ -27,8 +27,8 @@ struct memblock {
 };
 ```
 
-이 구조체에는 5개 변수가 선언되어 있다. 첫 번째 `bottom_up`는 메모리를 아래에서 위로 할당 해 줄 수 있는지 여부를 결정하는 변수이며 맞다면, `true`이다. 다음 변수는 `current_limit`는 메모리 블락의 제한된 크기를 나타낸다. 다음 세 개의 변수들은, 메모리 블락 타입(reserved, memory 그리고 physical memory)을 나타낸다. (타입 중에 physical memory는 `CONFIG_HAVE_MEMBLOCK_PHYS_MAP` 설정이 활성화 되어있어야 가능하다.)
-지금부터 `memblock_type` 자료구조를 보자.
+이 구조체에는 5개 변수가 선언되어 있습니다. 첫 번째 `bottom_up`는 메모리를 아래에서 위로 할당 해 줄 수 있는지 여부를 결정하는 변수이며 맞다면, `true`이다. 다음 변수는 `current_limit`는 메모리 블락의 제한된 크기를 나타냅니다. 다음 세 개의 변수들은, 메모리 블락 타입(reserved, memory 그리고 physical memory)을 나타냅니다. (타입 중에 physical memory는 `CONFIG_HAVE_MEMBLOCK_PHYS_MAP` 설정이 활성화 되어있어야 가능합니다.)
+지금부터 `memblock_type` 자료구조를 봅시다.
 
 ```C
 struct memblock_type {
@@ -39,7 +39,7 @@ struct memblock_type {
 };
 ```
 
-이 구조체는 메모리의 타입에 대해서 나타낸다. 각 변수들은 한 메모리 블락내에 있는 메모리 영역의 갯수, 모든 메모리 영역들의 총 사이즈 그리고 할당 된 메모리 영역의 배열 크기를 나타낸다. 마지막으로는 `memblock_region` 구조체의 배열에 대한 포인터를 나타내는 변수가 있다. `memblock_region` 구조체는 메모리 영역을 표현하는 구조체로 아래와 같이 정의되어 있다.
+이 구조체는 메모리의 타입에 대해서 나타냅니다. 각 변수들은 한 메모리 블락내에 있는 메모리 영역의 갯수, 모든 메모리 영역들의 총 사이즈 그리고 할당 된 메모리 영역의 배열 크기를 나타냅니다. 마지막으로는 `memblock_region` 구조체의 배열에 대한 포인터를 나타내는 변수가 있습니다. `memblock_region` 구조체는 메모리 영역을 표현하는 구조체로 아래와 같이 정의되어 있습니다.
 
 ```C
 struct memblock_region {
@@ -52,7 +52,7 @@ struct memblock_region {
 };
 ```
 
-`memblock_region`은 메모리 영역의 시작주소와 크기를 나타내고 있으며, 아래의 값들을 갖는 플래그를 변수로 갖고 있다.
+`memblock_region`은 메모리 영역의 시작주소와 크기를 나타내고 있으며, 아래의 값들을 갖는 플래그를 변수로 갖고 있습니다.
 
 ```C
 enum {
@@ -63,9 +63,9 @@ enum {
 };
 ```
 
-또한 만약 `CONFIG_HAVE_MEMBLOCK_NODE_MAP` 설정이 활성화 되어 있다면, `memblock_region`은 정수 타입의 변수인 [numa](http://en.wikipedia.org/wiki/Non-uniform_memory_access)를 포함하게 된다.  
+또한 만약 `CONFIG_HAVE_MEMBLOCK_NODE_MAP` 설정이 활성화 되어 있다면, `memblock_region`은 정수 타입의 변수인 [numa](http://en.wikipedia.org/wiki/Non-uniform_memory_access)를 포함하게 됩니다.  
 
-위에서 간략하게 본 구조체들의 관계를 의미론 적으로 표현하면 아래와 같이 나타낼 수 있다.
+위에서 간략하게 본 구조체들의 관계를 의미론 적으로 표현하면 아래와 같이 나타낼 수 있습니다.
 
 ```
 +---------------------------+   +---------------------------+
@@ -83,12 +83,12 @@ enum {
 +---------------------------+   +---------------------------+
 ```
 
-`Memblock`에서는 `memblock` 구조체, `memblock_type` 구조체 그리고 `memblock_region` 구조체가 제일 주된 구조체들이다. 이제 부터는 메모리 블락의 초기화 과정에 대해서 알아보자.
+`Memblock`에서는 `memblock` 구조체, `memblock_type` 구조체 그리고 `memblock_region` 구조체가 제일 주된 구조체들입니다. 이제 부터는 메모리 블락의 초기화 과정에 대해서 알아봅시다.
 
 Memblock 초기화
 --------------------------------------------------------------------------------
 
-`memblock`에 관련된 API들에 대해서 선언은 [include/linux/memblock.h](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/include/linux/memblock.h) 헤더파일에서, 정의는 . [mm/memblock.c](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/mm/memblock.c) 파일에서 찾아 볼 수 있다. 소스코드의 처음 시작 부분을 보면, `memblock`구조체의 초기화관련 코드를 찾아 볼 수 있다:
+`memblock`에 관련된 API들에 대해서 선언은 [include/linux/memblock.h](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/include/linux/memblock.h) 헤더파일에서, 정의는 . [mm/memblock.c](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/mm/memblock.c) 파일에서 찾아 볼 수 있습니다. 소스코드의 처음 시작 부분을 보면, `memblock`구조체의 초기화관련 코드를 찾아 볼 수 있습니다:
 
 ```C
 struct memblock memblock __initdata_memblock = {
@@ -110,7 +110,7 @@ struct memblock memblock __initdata_memblock = {
 };
 ```
 
-여기 `memblock`구조체 이름과 같은 객체 `memblock`의 초기화를 볼 수 있다. 그 전에 `__initdata_memblock`에 대해서 먼저 보면, 이 매크로는 이렇게 정의되어 있다:
+여기 `memblock`구조체 이름과 같은 객체 `memblock`의 초기화를 볼 수 있습니다. 그 전에 `__initdata_memblock`에 대해서 먼저 보면, 이 매크로는 이렇게 정의되어 있습니다:
 
 ```C
 #ifdef CONFIG_ARCH_DISCARD_MEMBLOCK
@@ -122,9 +122,9 @@ struct memblock memblock __initdata_memblock = {
 #endif
 ```
 
-매크로는 `CONFIG_ARCH_DISCARD_MEMBLOCK`에 의존하고 있다. 이 설정이 활성화되면, memblock 코드들은 `.init` 섹션에 위치하게 되고, 커널이 부팅이 끝나고 나면 해제됩니다. 
+매크로는 `CONFIG_ARCH_DISCARD_MEMBLOCK`에 의존하고 있습니다. 이 설정이 활성화되면, memblock 코드들은 `.init` 섹션에 위치하게 되고, 커널이 부팅이 끝나고 나면 해제됩니다. 
 
-다음으로는 `memblock` 구조체의 변수들인 `memblock_type memory`, `memblock_type reserved` 그리고 `memblock_type physmem`의 초기화 과정을 볼 수 있습니다. 여기서 `memblock_type.regions`의 초기화 과정에만 관심이 있다. `memblock_type`의 모든 변수들은 `memblock_region`의 배열로 초기화를 한다. 
+다음으로는 `memblock` 구조체의 변수들인 `memblock_type memory`, `memblock_type reserved` 그리고 `memblock_type physmem`의 초기화 과정을 볼 수 있습니다. 여기서 `memblock_type.regions`의 초기화 과정에만 관심이 있습니다. `memblock_type`의 모든 변수들은 `memblock_region`의 배열로 초기화를 합ㄴ디ㅏ. 
 
 ```C
 static struct memblock_region memblock_memory_init_regions[INIT_MEMBLOCK_REGIONS] __initdata_memblock;
@@ -183,12 +183,12 @@ static inline phys_addr_t memblock_cap_size(phys_addr_t base, phys_addr_t *size)
 
 `memblock_cap_size`함수는 주어진 사이즈와 `ULLONG_MAX - base` 중에 더 작은 값을 리턴합니다.
 
-새로운 메모리 영역의 마지막 주소를 계산해 낸 다음에, `memblock_add_range` 함수는 새로운 메모리 영역과 기존에 추가된 영역사이에 겹쳐지는 부분 그리고 합쳐지는 조건을 확인한다. `memblock`에 새로운 메모리 영역을 추가하는  것은 두 단계로 나누어 진다:
+새로운 메모리 영역의 마지막 주소를 계산해 낸 다음에, `memblock_add_range` 함수는 새로운 메모리 영역과 기존에 추가된 영역사이에 겹쳐지는 부분 그리고 합쳐지는 조건을 확인한다. `memblock`에 새로운 메모리 영역을 추가하는  것은 두 단계로 나누어 집니다:
 
 * 겹쳐지는 영역이 없는 메모리에 대해서 새로운 메모리 영역으로 추가한다.
 * 인접한 메모리 영역에 대해서는 하나로 합친다.
 
-우리는 이미 추가된 메모리 영역에 대해서 새로운 메모리 영역 사이에 겹쳐지는 부분이 있는 지 살펴볼 것이다:
+우리는 이미 추가된 메모리 영역에 대해서 새로운 메모리 영역 사이에 겹쳐지는 부분이 있는 지 살펴볼 겁니다:
 
 ```C
 	for (i = 0; i < type->cnt; i++) {
@@ -206,7 +206,7 @@ static inline phys_addr_t memblock_cap_size(phys_addr_t base, phys_addr_t *size)
 	}
 ```
 
-`memblock`에 이미 추가된 메모리 영역과 새로 더해 질 메모리 영역 사이에 겹쳐지는 영역이 없다면, 기존의 영역과는 다른 메모리 영역으로 추가해주는 것이 첫 번재 단계이다. 그리고 새로운 메모리 영역이 메모리 블락에 알맞은지 확인한다. 그리고 `memblock_double_array`함수를 다른 방법으로 호출한다:
+`memblock`에 이미 추가된 메모리 영역과 새로 더해 질 메모리 영역 사이에 겹쳐지는 영역이 없다면, 기존의 영역과는 다른 메모리 영역으로 추가해주는 것이 첫 번재 단계입니다. 그리고 새로운 메모리 영역이 메모리 블락에 알맞은지 확인한다. 그리고 `memblock_double_array`함수를 다른 방법으로 호출합니다:
 
 ```C
 while (type->cnt + nr_new > type->max)
@@ -282,7 +282,9 @@ if (base < end) {
 }
 ```
 
-이 경우에 우리는 `overlapping portion`(아랫 부분의 메모리는 이미 겹쳐져 있기 때문에 윗 부분에 대해서만 삽입합니다)를 삽입합니다. 그 다음은 남은 부분을 추가하고, `memblock_merge_regions`함수로 두 메모리 영역을 합칩니다. 위에서 언급했듯이, `memblock_merge_regions`함수는 이웃한 같은 메모리 영역을 합칩니다. 제공된 `memblock_type`으로부터 모든 메모리 영역들을 하나 씩 확인하면서, 이웃한 메모리 영역들을 병합합니다. `type->regions[i]` 그리고 `type->regions[i + 1]` 그리고 이웃한 메모리 영역들의 플래그가 같은지 그리고 같은 노드(첫 번째 메모리 영역의 끝 주소와 두 번째 메모리 영역의 시작 주소가 같은지 여부)에 해당하는지 확인합니다:
+이 경우, 우리는 겹치지 않는 나머지 영역(overlapping portion)만을 분리하여 삽입합니다. (아랫부분의 메모리는 이미 기존 영역과 겹쳐져 있으므로, 겹치지 않는 윗부분의 영역만 새로 삽입하게 됩니다.) 그 후 남은 부분들을 추가하고, `memblock_merge_regions` 함수를 호출하여 두 메모리 영역을 하나로 합칩니다.
+
+앞서 언급했듯이, `memblock_merge_regions` 함수는 인접한 동일한 속성의 메모리 영역들을 병합하는 역할을 합니다. 이 함수는 인자로 전달된 `memblock_type` 내의 모든 메모리 영역을 하나씩 확인하면서 서로 인접한 영역들을 병합해 나갑니다. 이때 `type->regions[i]`(현재 영역)와 `type->regions[i + 1]`(다음 영역)을 비교하며, 이웃한 두 메모리 영역의 플래그가 일치하는지, 그리고 동일한 노드에 속해 있는지(즉, 첫 번째 메모리 영역의 끝 주소와 두 번째 메모리 영역의 시작 주소가 딱 맞닿아 있는지) 확인합니다.
 
 ```C
 while (i < type->cnt - 1) {
@@ -298,7 +300,7 @@ while (i < type->cnt - 1) {
 	}
 ```
 
-이 조건 중 하나라도 `true`가 아니면, 첫 번째 메모리 영역의 사이즈를 두 번째 메모리 영역의 사이즈로 업데이트한다:
+이 조건 중 하나라도 `true`가 아니면, 첫 번째 메모리 영역의 사이즈를 두 번째 메모리 영역의 사이즈로 업데이트합니다:
 
 ```C
 this->size += next->size;
@@ -329,30 +331,31 @@ type->cnt--;
 +------------------------------------------------+
 ```
 
-As we decreased counts of regions in a memblock with certain type, increased size of the `this` region and shifted all regions which are located after `next` region to its place.
+특정 타입의 메모리 블록 내 영역 개수(`cnt`)를 줄였으므로, 현재 영역(`this`)의 크기를 늘리고 `next` 영역 다음에 위치한 모든 영역을 원래 next가 있던 위치로 이동시켰습니다. 
 
-That's all. This is the whole principle of the work of the `memblock_add_range` function.
+그게 다입니다. 이것이 `memblock_add_range` 함수가 작동하는 전체 원리입니다.
 
-There is also `memblock_reserve` function which does the same as `memblock_add`, but with one difference. It stores `memblock_type.reserved` in the memblock instead of `memblock_type.memory`.
+memblock_reserve 에 대해선, 이 함수는 memblock_add와 동일하지만 한 가지 차이점이 있습니다. memblock_type.emory 대신 memblock_type.reserved를 저장합니다.
 
-Of course this is not the full API. Memblock provides APIs not only for adding `memory` and `reserved` memory regions, but also:
+당연히 이것이 API의 전부는 아닙니다. Memblock은 메모리 및 예약된 메모리 영역을 추가하는 것뿐만 아니라 다음과 같은 다양한 API를 제공합니다:
 
-* memblock_remove - removes memory region from memblock;
-* memblock_find_in_range - finds free area in given range;
-* memblock_free - releases memory region in memblock;
-* for_each_mem_range - iterates through memblock areas.
+- `memblock_remove` - memblock에서 메모리 영역을 제거합니다.
+- `memblock_find_in_range` - 주어진 범위 내에서 빈 공간을 찾습니다.
+- `memblock_free` - memblock에서 메모리 영역을 해제합니다.
+- `for_each_mem_range` - memblock 영역들을 순회(반복문)합니다.
 
-and many more....
+그리고 이 외에도 더 많은 API가 있습니다....
 
 Getting info about memory regions
 --------------------------------------------------------------------------------
 
-Memblock also provides an API for getting information about allocated memory regions in the `memblock`. It is split in two parts:
+Memblock은 Memblock에 할당된 메모리 영역에 대한 정보를 얻기 위한 API를 제공합니다. 이 API는 두 부분으로 나뉩니다:
 
-* get_allocated_memblock_memory_regions_info - getting info about memory regions;
-* get_allocated_memblock_reserved_regions_info - getting info about reserved regions.
+`get_allocated_memblock_memory_regions_info` - 메모리 영역에 대한 정보 가져옵니다;
 
-Implementation of these functions is easy. Let's look at `get_allocated_memblock_reserved_regions_info` for example:
+`get_allocated_memblock_reserved_regions_info` - 예약된 지역에 대한 정보를 가져옵니다.
+
+이러한 함수의 구현은 간단합니다. 예를 들어 `get_allocated_memblock_reserved_regions_info`를 살펴보겠습니다:
 
 ```C
 phys_addr_t __init_memblock get_allocated_memblock_reserved_regions_info(
@@ -368,25 +371,27 @@ phys_addr_t __init_memblock get_allocated_memblock_reserved_regions_info(
 }
 ```
 
-First of all this function checks that `memblock` contains reserved memory regions. If `memblock` does not contain reserved memory regions we just return zero. Otherwise we write the physical address of the reserved memory regions array to the given address and return aligned size of the allocated array. Note that there is `PAGE_ALIGN` macro used for align. Actually it depends on size of page:
+우선, 이 함수는 `memblock`에 예약된 메모리 영역이 포함되어 있는지 확인합니다. `memblock`에 예약된 메모리 영역이 없다면 0을 반환합니다. 
+
+그렇지 않다면, 예약된 메모리 영역 배열의 물리 주소(Physical Address)를 인자로 주어진 주소(`addr`)에 기록하고, 할당된 배열의 정렬된 크기(aligned size)를 반환합니다. 정렬에 `PAGE_ALIGN` 매크로가 사용된다는 점에 유의하세요. 이 매크로는 실제로는 페이지 크기에 의존합니다:
 
 ```C
 #define PAGE_ALIGN(addr) ALIGN(addr, PAGE_SIZE)
 ```
 
-Implementation of the `get_allocated_memblock_memory_regions_info` function is the same. It has only one difference, `memblock_type.memory` used instead of `memblock_type.reserved`.
+`get_allocated_memblock_memory_regions_info` 함수의 구현도 동일합니다. `memblock_type.reserved` 대신 `memblock_type.memory`라는 한가지 차이점만 있습니다.
 
 Memblock debugging
 --------------------------------------------------------------------------------
 
-There are many calls to `memblock_dbg` in the memblock implementation. If you pass the `memblock=debug` option to the kernel command line, this function will be called. Actually `memblock_dbg` is just a macro which expands to `printk`:
+memblock의 구현 코드를 보면 `memblock+dbg` 함수가 자주 호출되는 것을 볼 수 있습니다. 커널 커맨드 라인(부팅 옵션)에 `memblock=debug` 옵션을 전달하면 이 함수가 활성화되어 호출됩니다. 실제로 'memblock_dbg'는 'printk'로 확장되는 매크로일 뿐입니다:
 
 ```C
 #define memblock_dbg(fmt, ...) \
          if (memblock_debug) printk(KERN_INFO pr_fmt(fmt), ##__VA_ARGS__)
 ```
 
-For example you can see a call of this macro in the `memblock_reserve` function:
+예를들어, `memblock_reserve`함수 내부에서 이 매크로가 어떻게 호출되는지 볼 수 있습니다.
 
 ```C
 memblock_dbg("memblock_reserve: [%#016llx-%#016llx] flags %#02lx %pF\n",
@@ -395,11 +400,13 @@ memblock_dbg("memblock_reserve: [%#016llx-%#016llx] flags %#02lx %pF\n",
 		     flags, (void *)_RET_IP_);
 ```
 
-And you will see something like this:
+그러면 부팅 로그(`dmesg`)에서 다음과 같은 형태의 디버깅 메시지를 확인할 수 있게 됩니다:
 
-![Memblock](http://oi57.tinypic.com/1zoj589.jpg)
+<! -![Memblock](http://oi57.tinypic.com/1zoj589.jpg) ->
 
-Memblock also has support in [debugfs](http://en.wikipedia.org/wiki/Debugfs). If you run the kernel on another architecture than `X86` you can access:
+`memblock_reserve: [0x0000000000100000-0x0000000000ffffff] flags 0x00 stext+0x0/0x0`
+
+또한 Memblock은 가상 파일 시스템인 debugfs를 통한 조회도 지원합니다. 만약 X86 이외의 아키텍처에서 커널을 실행 중이라면, 아래 경로에 접근하여 Memblock의 내용이 덤프(Dump)된 정보를 확인할 수 있습니다:
 
 * /sys/kernel/debug/memblock/memory
 * /sys/kernel/debug/memblock/reserved
@@ -410,9 +417,11 @@ to get a dump of the `memblock` contents.
 Conclusion
 --------------------------------------------------------------------------------
 
-This is the end of the first part about linux kernel memory management. If you have questions or suggestions, ping me on twitter [0xAX](https://twitter.com/0xAX), drop me an [email](anotherworldofworld@gmail.com) or just create an [issue](https://github.com/0xAX/linux-insides/issues/new).
+이것으로 리눅스 커널 메모리 관리에 관한 첫 번째 파트를 마칩니다. 
 
-**Please note that English is not my first language and I am really sorry for any inconvenience. If you found any mistakes please send me a PR to [linux-insides](https://github.com/0xAX/linux-insides).**
+**질문/제안(내용 관련)**: 질문이나 제안할 것이 있으면 언제든 트위터 [@0xAX](https://twitter.com/0xAX)를 핑(ping)하거나 [이슈](https://github.com/0xAX/linux-insides/issues/new)를 추가하세요. 아니면 원저자에게 간단히 [이메일](mailto:anotherworldofworld@gmail.com)을 주세요.
+
+**질문/제안(번역 repo 관련)**: linux-insides-ko 레포지토리 관련해서 제안할 것이나 궁금한 것 등등이 있으시면 언제든 @junsooo에게 간단히 [이메일](mailto:freshmilk264@gmail.com)이나 [이슈](https://github.com/junsooo/linux-insides-ko/issues/new)를 추가해주세요.
 
 Links
 --------------------------------------------------------------------------------
