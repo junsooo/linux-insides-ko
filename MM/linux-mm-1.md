@@ -391,7 +391,7 @@ memblock의 구현 코드를 보면 `memblock+dbg` 함수가 자주 호출되는
          if (memblock_debug) printk(KERN_INFO pr_fmt(fmt), ##__VA_ARGS__)
 ```
 
-예를들어, `memblock_reserve`함수 내부에서 이 매크로가 어떻게 호출되는지 볼 수 있습니다.
+예를 들어, `memblock_reserve` 함수 내부에서 이 매크로가 어떻게 호출되는지 볼 수 있습니다.
 
 ```C
 memblock_dbg("memblock_reserve: [%#016llx-%#016llx] flags %#02lx %pF\n",
