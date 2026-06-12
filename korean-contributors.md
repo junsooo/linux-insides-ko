@@ -11,3 +11,4 @@ Linux-insides-ko에 기여하신 분들의 명단
 * [Chris Noh](https://github.com/biyott)
 * [SeongJae Park](https://github.com/sjp38)
 * [sloth0317](https://github.com/sloth0317)
+* [realgitman1](https://github.com/realgitman1)
